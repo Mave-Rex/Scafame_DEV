@@ -1,0 +1,22 @@
+# Ignorar entornos virtuales
+env/
+venv/
+.env/
+build/
+dist/
+
+
+# Ignorar archivos de caché de Python
+__pycache__/
+*.py[cod]
+
+# Ignorar configuraciones locales
+*.env
+
+# Ignorar logs
+*.log
+
+# Ignorar todos los archivos generados
+*.spec
+*.pyc
+

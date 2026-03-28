@@ -1,0 +1,14 @@
+services:
+  database:
+    image: postgres:latest
+    container_name: SigfameDB
+    restart: always
+    environment:
+      - POSTGRES_DB=SigfameDB
+      - POSTGRES_USER=magvx105
+      - POSTGRES_PASSWORD=admin1234
+    ports:
+      - '5432:5432'
+    volumes:
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    command: postgres -c listen_addresses='*'

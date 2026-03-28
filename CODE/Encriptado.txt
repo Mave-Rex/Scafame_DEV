@@ -1,0 +1,20 @@
+import * as bcrypt from 'bcrypt';
+
+const saltRounds = 10; // Número de rondas de sal para encriptación
+
+async function hashPassword(password: string): Promise<string> {
+  try {
+    const hash = await bcrypt.hash(password, saltRounds);
+    console.log('Contraseña encriptada:', hash);
+    return hash;
+  } catch (error) {
+    console.error('Error al encriptar la contraseña:', error);
+    throw error;
+  }
+}
+
+// Ejemplo de uso:
+const password = 'miContraseñaSecreta';
+hashPassword(password).then((hashedPassword) => {
+  console.log('Contraseña hasheada:', hashedPassword);
+});
