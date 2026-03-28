@@ -1,0 +1,61 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16
+    container_name: sigfame-db
+    environment:
+      POSTGRES_DB: SigfameDB
+      POSTGRES_USER: magvx105
+      POSTGRES_PASSWORD: admin1234
+    ports:
+      - "5432:5432"                 # opcional: acceso desde host
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U magvx105 -d SigfameDB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sigfame-net
+
+  backend:
+    build:
+      context: ./scafame_backend
+      dockerfile: Dockerfile
+    container_name: sigfame-backend
+    env_file:
+      - ./scafame_backend/.env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: magvx105
+      DB_PASSWORD: admin1234   # <- nombre correcto según tu AppModule
+      DB_NAME: SigfameDB
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"             # <- necesario porque el front llama a :3000
+    networks:
+      - sigfame-net
+
+  frontend:
+    build:
+      context: "./deploy frontend"
+    container_name: sigfame-frontend
+    ports:
+      - "8080:80"               # Front en http://localhost:8080
+    depends_on:
+      - backend
+    networks:
+      - sigfame-net
+
+volumes:
+  pgdata:
+
+networks:
+  sigfame-net:
+    driver: bridge

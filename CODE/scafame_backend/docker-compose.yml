@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  database:
+    image: postgres:latest
+    container_name: ScafameDB
+    restart: always
+    environment:
+      - POSTGRES_DB=scafame_db
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin1234
+    ports:
+      - '5432:5432'
+    networks:
+      - scafame-net
+
+  backend:
+    build: .
+    container_name: Scafame-backend
+
+    ports:
+      - '3000:3000'
+    depends_on:
+      - database
+    env_file:
+      - .env
+    networks:
+
+      - scafame-net
+
+networks:
+  scafame-net:
+    driver: bridge
+
+
