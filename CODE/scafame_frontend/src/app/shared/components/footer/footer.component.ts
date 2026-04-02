@@ -4,8 +4,8 @@ import { Component } from '@angular/core';
   selector: 'app-footer',
   standalone: true,
   template: `
-    <footer class="bg-black text-white text-center text-sm py-1 w-full mt-auto">
-      <div class="max-w-screen-lg mx-auto">
+    <footer class="bg-black text-white text-center text-sm py-2 px-4 w-full mt-auto">
+      <div class="w-full">
         <p class="mb-1 font-semibold">¿Necesitas Ayuda?</p>
         <p>
           Contáctanos: 

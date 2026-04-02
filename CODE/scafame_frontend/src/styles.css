@@ -5,6 +5,12 @@ body {
   font-family: 'Share Tech Mono', monospace;
 }
 
+html,
+body {
+  margin: 0;
+  overflow-x: hidden;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

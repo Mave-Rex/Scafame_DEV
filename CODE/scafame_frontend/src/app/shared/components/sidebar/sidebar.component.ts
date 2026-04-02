@@ -12,10 +12,10 @@ import { UserService } from '../../../users/services/user.service'; // ⚡ Ajust
   imports: [CommonModule, ButtonComponent],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
-    <aside class="bg-black text-white w-64 h-full flex flex-col justify-between p-6 shadow-lg lg:ml-12">
+    <aside class="bg-black text-white w-64 h-full flex flex-col justify-between p-6 shadow-lg">
 
       <!-- Usuario -->
-      <div class="flex flex-col text-left pl-4">
+      <div class="flex flex-col text-left">
         <div class="flex justify-center mb-6">
           <iconify-icon icon="mdi:account-circle" class="text-8xl"></iconify-icon>
         </div>
@@ -50,7 +50,7 @@ import { UserService } from '../../../users/services/user.service'; // ⚡ Ajust
       </div>
 
       <!-- Botón cerrar sesión -->
-      <div class="mt-8 pl-4">
+      <div class="mt-8">
         <app-button
           label="Cerrar Sesión"
           variant="dark"

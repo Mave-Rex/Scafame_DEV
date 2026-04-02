@@ -17,21 +17,21 @@ import { ProductCardComponent } from '../card/product-card.component';
   template: `
     <div class="bg-black text-white rounded-2xl w-full p-4">
       <!-- Filtros -->
-      <div class="flex flex-wrap gap-3 justify-center mb-3">
+      <div class="flex flex-wrap gap-3 justify-center mb-4">
         <!-- Buscador por nombre de producto -->
         <input
           type="text"
           [(ngModel)]="searchTerm"
           (ngModelChange)="filtrarProductos()"
-          placeholder="Buscar producto..."
-          class="rounded-full text-black px-3 py-1 text-sm font-bold w-[220px]"
+          placeholder="Buscar producto"
+          class="rounded-lg text-black px-4 py-2 text-sm font-semibold w-[250px] border border-gray-300"
         />
 
         <!-- Categorías -->
         <select
           [(ngModel)]="selectedCategoria"
           (ngModelChange)="filtrarProductos()"
-          class="rounded-full text-black px-3 py-1 text-sm font-bold"
+          class="rounded-lg text-black px-4 py-2 text-sm font-semibold border border-gray-300"
         >
           <option value="">Todas las Categorías</option>
           <option *ngFor="let nombreCat of filteredCategorias" [value]="nombreCat">
@@ -40,27 +40,30 @@ import { ProductCardComponent } from '../card/product-card.component';
         </select>
       </div>
 
-      <!-- Grilla scrollable -->
+      <!-- Grilla con scroll horizontal para ver inventario -->
       <div
-        class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-5 gap-4 overflow-y-auto max-h-[360px] p-2 justify-items-center"
+        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 overflow-y-auto max-h-[620px] p-2 sm:p-4 rounded-lg"
         style="scrollbar-width: thin; scrollbar-color: white black;"
       >
-
-        <app-product-card
-        *ngFor="let producto of filteredProductos"
-        [nombre]="producto.nombre"
-        [stock]="producto.stock"
-        [imagen]="producto.imagen"
-        [selected]="!!producto.selected"
-        [mostrarAccion]="showAddButton"
-        (accion)="onAgregar(producto)"
-        (verDetalles)="onVerDetalles(producto)"
-        (remover)="onRemover(producto)"
-        [modoIngreso]="modoIngreso"
-
-        [showUnit]="true"
-        [unit]="producto.unidad"
-        ></app-product-card>
+        <div
+          *ngFor="let producto of filteredProductos"
+          class="flex justify-center"
+          (click)="onSeleccionar(producto)"
+        >
+          <app-product-card
+            [nombre]="producto.nombre"
+            [stock]="producto.stock"
+            [imagen]="producto.imagen"
+            [selected]="!!producto.selected"
+            [mostrarAccion]="showAddButton"
+            (accion)="onAgregar(producto)"
+            (verDetalles)="onVerDetalles(producto)"
+            (remover)="onRemover(producto)"
+            [modoIngreso]="modoIngreso"
+            [showUnit]="true"
+            [unit]="producto.unidad"
+          ></app-product-card>
+        </div>
       </div>
 
       <!-- Modal de Detalles -->
@@ -99,6 +102,7 @@ export class ProductTableComponent implements OnChanges {
   @Output() verDetalles = new EventEmitter<any>();
   @Output() agregar = new EventEmitter<any>();
   @Output() remover = new EventEmitter<any>();
+  @Output() seleccionar = new EventEmitter<any>();
 
   // Filtros
   searchTerm = '';
@@ -168,6 +172,13 @@ export class ProductTableComponent implements OnChanges {
 
   onRemover(producto: any) {
     this.remover.emit(producto);
+  }
+
+  onSeleccionar(producto: any) {
+    if (!this.showAddButton || !this.modoIngreso) {
+      return;
+    }
+    this.seleccionar.emit(producto);
   }
 
   closeModal() {

@@ -10,7 +10,7 @@ import { FooterComponent } from '../../shared/components/footer/footer.component
   standalone: true,
   imports: [CommonModule, SidebarComponent, HeaderComponent, FooterComponent, RouterOutlet],
   template: `
-    <div class="w-screen h-screen overflow-hidden flex flex-col font-display relative">
+    <div class="w-full min-h-screen flex flex-col font-display relative bg-white overflow-x-hidden">
 
 
       <!-- BACKDROP sidebar móvil -->
@@ -45,7 +45,7 @@ import { FooterComponent } from '../../shared/components/footer/footer.component
 
       <!-- MAIN -->
       <main
-        class="flex-1 min-h-0 bg-white p-6 transition-all duration-300 overflow-y-auto"
+        class="flex-1 bg-white p-6 transition-all duration-300"
         [class.lg:ml-64]="true"
       >
         <div class="max-w-[1200px] mx-auto w-full">
@@ -53,15 +53,14 @@ import { FooterComponent } from '../../shared/components/footer/footer.component
         </div>
       </main>
       
-      <!-- FOOTER (RESTAURADO) -->
-      <footer class="bg-black text-white text-center py-3 w-full transition-all duration-300">
-        <!-- En pantallas grandes: desplazamos 16rem y reducimos el ancho restante -->
+      <!-- FOOTER en flujo normal (no fijo) -->
+      <div class="w-full transition-all duration-300">
         <div class="w-full lg:ml-64 lg:w-[calc(100%-16rem)]">
-          <div class="max-w-[1200px] mx-auto px-4">
+          <div class="w-full">
             <app-footer></app-footer>
           </div>
         </div>
-      </footer>
+      </div>
     </div>
   `
 })

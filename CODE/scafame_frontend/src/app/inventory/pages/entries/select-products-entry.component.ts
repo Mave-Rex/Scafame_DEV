@@ -18,8 +18,8 @@ import { normalizeImage } from '../../../shared/utils/url.util';
   imports: [CommonModule, ButtonComponent, ProductTableComponent],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
-<main class="flex-1 bg-white p-8 font-display overflow-hidden">
-  <div class="max-w-[1100px] mx-auto relative h-full flex flex-col justify-center">
+<main class="flex-1 bg-white p-6 md:p-8 font-display overflow-x-hidden overflow-y-auto">
+  <div class="max-w-[1100px] mx-auto relative min-h-full flex flex-col justify-start">
     <!-- Indicador compacto: Ingresos -->
     <div
       *ngIf="selectedProducts.length > 0"
@@ -40,20 +40,9 @@ import { normalizeImage } from '../../../shared/utils/url.util';
     <div class="flex flex-col items-center text-center">
       <h1 class="text-4xl font-bold text-black mb-6 mt-2">Realizar ingresos</h1>
 
-      <app-product-table
-        [productos]="productos"
-        [categorias]="categorias"
-        [showAddButton]="true"
-        [modoIngreso]="true"
-        (verDetalles)="onDetails($event)"
-        (agregar)="onAdd($event)"
-        (remover)="onRemove($event)"
-      ></app-product-table>
-
-      <!-- Botonera alineada -->
+      <!-- Botonera superior fija mientras haces scroll -->
       <div
-        class="flex flex-col gap-4 items-center mt-6
-               md:absolute md:-right-5 md:bottom-1 md:items-end md:mt-0"
+        class="w-full mb-4 sticky top-2 z-30 bg-white/95 backdrop-blur-sm rounded-xl py-2 flex flex-col sm:flex-row gap-3 items-center sm:justify-end"
       >
         <app-button label="Volver" variant="light" (click)="onGoBack()"></app-button>
         <app-button
@@ -63,6 +52,17 @@ import { normalizeImage } from '../../../shared/utils/url.util';
           (click)="goToReview()"
         ></app-button>
       </div>
+
+      <app-product-table
+        [productos]="productos"
+        [categorias]="categorias"
+        [showAddButton]="true"
+        [modoIngreso]="true"
+        (verDetalles)="onDetails($event)"
+        (seleccionar)="onToggleSelect($event)"
+        (agregar)="onAdd($event)"
+        (remover)="onRemove($event)"
+      ></app-product-table>
     </div>
   </div>
 
@@ -181,13 +181,38 @@ export class SelectProductsEntryComponent implements OnInit {
     this.markSelected();
     this.entryService.setSelectedProducts(this.selectedProducts);
 
-    // TOAST
-    this.showSelectToast(this.totalIngresos);
+    this.showTotalToast('Producto seleccionado');
   }
 
-  private showSelectToast(total: number) {
+  onToggleSelect(producto: any) {
+    const existing = this.selectedProducts.find(p => p.id === producto.id);
+
+    if (existing) {
+      this.selectedProducts = this.selectedProducts.filter(p => p.id !== producto.id);
+      this.totalIngresos -= existing.cantidad;
+    } else {
+      this.selectedProducts.push({
+        id: producto.id,
+        nombre: producto.nombre,
+        cantidad: 1,
+        unidad: producto.unidad,
+        imagen: producto.imagen
+      });
+      this.totalIngresos++;
+    }
+
+    if (this.totalIngresos < 0) {
+      this.totalIngresos = 0;
+    }
+
+    this.markSelected();
+    this.entryService.setSelectedProducts(this.selectedProducts);
+    this.showTotalToast('Total seleccionados');
+  }
+
+  private showTotalToast(actionLabel: string) {
     if (this.toastRef) this.toastr.remove(this.toastRef.toastId);
-    this.toastRef = this.toastr.info(`Producto seleccionado: ${total}`, '', {
+    this.toastRef = this.toastr.info(`${actionLabel}: ${this.totalIngresos}`, '', {
       positionClass: 'toast-bottom-right',
       timeOut: 1200,
       closeButton: false,
@@ -197,7 +222,11 @@ export class SelectProductsEntryComponent implements OnInit {
 
   onRemove(producto: any) {
     const existing = this.selectedProducts.find(p => p.id === producto.id);
-    if (existing && existing.cantidad > 1) {
+    if (!existing) {
+      return;
+    }
+
+    if (existing.cantidad > 1) {
       existing.cantidad--;
       this.totalIngresos--;
     } else {
@@ -205,8 +234,13 @@ export class SelectProductsEntryComponent implements OnInit {
       this.totalIngresos--;
     }
 
+    if (this.totalIngresos < 0) {
+      this.totalIngresos = 0;
+    }
+
     this.markSelected();
     this.entryService.setSelectedProducts(this.selectedProducts);
+    this.showTotalToast('Total seleccionados');
   }
 
   markSelected() {

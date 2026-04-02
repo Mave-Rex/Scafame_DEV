@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Component, Input, Output, EventEmitter, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ImageUrlPipe } from '../../pipes/image-url.pipe';
 
@@ -12,107 +12,115 @@ type MinimalProduct = {
   selector: 'app-product-card',
   standalone: true,
   imports: [CommonModule, ImageUrlPipe],
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
     <div
-      class="rounded-xl w-40 h-60 text-black flex flex-col justify-between items-center transition-all duration-200 p-3"
+      class="rounded-2xl text-black flex flex-col justify-between items-center transition-all duration-200 p-4 h-[22rem] w-full max-w-[18rem]"
       [ngClass]="{
-        'bg-green-100 ring-4 ring-green-400 scale-103 shadow-2xl': selected,
-        'bg-white shadow-md': !selected
+        'bg-green-100 ring-4 ring-green-500 shadow-2xl scale-105': selected,
+        'bg-white shadow-lg hover:shadow-xl hover:scale-102': !selected
       }"
     >
       <!-- Imagen -->
-      <div class="w-24 h-24 rounded-md overflow-hidden bg-gray-300 flex items-center justify-center">
+      <div class="w-28 h-28 rounded-lg overflow-hidden bg-gray-300 flex items-center justify-center flex-shrink-0">
         <img
           *ngIf="imageResolved; else noImgTpl"
           [src]="imageResolved | imageUrl"
           [alt]="nameResolved || 'Producto'"
-          class="h-24 w-24 rounded-lg object-cover"
+          class="h-28 w-28 rounded-lg object-cover"
         />
         <ng-template #noImgTpl>
-          <span class="text-xs font-bold text-black">Sin imagen</span>
+          <span class="text-sm font-bold text-black">Sin imagen</span>
         </ng-template>
       </div>
 
       <!-- Info -->
-      <div class="text-xs text-center mt-2 leading-tight">
-        <p class="font-bold text-[11px]">Producto</p>
-        <p class="text-[11px] text-center break-words line-clamp-2">
-          {{ nameResolved || '—' }}
-        </p>
-
-
-        <p class="font-bold mt-1 text-[11px]">Stock</p>
+      <div class="text-sm text-center mt-3 leading-tight flex-grow">
+        <p class="font-bold text-xs text-gray-600 uppercase">{{ nameResolved || '—' }}</p>
+        
+        <p class="font-semibold mt-2 text-base">Stock</p>
 
         <!-- Stock + Unidad -->
         <div
-          class="flex items-center justify-center gap-1"
+          class="flex items-center justify-center gap-2 mt-1"
           [attr.aria-label]="'Stock: ' + (stock === 0 ? 'Agotado' : stock) + (showUnit && unitResolved ? ' ' + unitResolved : '')"
         >
           <span
-            class="text-[11px]"
-            [ngClass]="{ 'text-red-600 font-bold': stock === 0 }"
+            class="text-2xl font-bold"
+            [ngClass]="{ 'text-red-600': stock === 0, 'text-green-600': stock > 0 }"
           >
-            {{ stock === 0 ? 'Agotado' : stock }}
+            {{ stock === 0 ? '0' : stock }}
           </span>
 
           <!-- Pill de unidad -->
           <span
             *ngIf="showUnit && unitResolved"
-            class="text-[10px] leading-none px-1.5 py-[1px] rounded-full border"
+            class="text-xs leading-none px-2 py-1 rounded-full border font-semibold"
             [ngClass]="{
-              'border-gray-400 text-gray-700': stock > 0,
-              'border-gray-300 text-gray-400': stock === 0
+              'border-green-400 bg-green-50 text-green-700': stock > 0,
+              'border-gray-300 bg-gray-50 text-gray-400': stock === 0
             }"
           >
             {{ unitResolved }}
           </span>
         </div>
+
+        <!-- Estado si está agotado -->
+        <p *ngIf="stock === 0" class="text-xs text-red-600 font-semibold mt-2">AGOTADO</p>
       </div>
 
       <!-- Acciones -->
-      <div class="w-full mt-2">
+      <div class="w-full mt-4 flex flex-col gap-2">
         <div *ngIf="!mostrarAccion" class="flex justify-center">
           <button
-            class="bg-black text-white text-[10px] px-3 py-[4px] rounded-full font-bold"
-            (click)="verDetalles.emit()"
+            class="bg-black text-white text-sm px-4 py-2 rounded-lg font-semibold hover:bg-gray-800 w-full"
+            (click)="$event.stopPropagation(); verDetalles.emit()"
           >
             Detalles
           </button>
         </div>
 
-        <div *ngIf="mostrarAccion" class="flex justify-between items-center px-1">
-          <button
-            class="bg-black text-white text-[10px] px-3 py-[4px] rounded-full font-bold"
-            (click)="verDetalles.emit()"
-          >
-            Detalles
-          </button>
-
-          <div class="flex gap-1">
-            <!-- Botón Agregar -->
+        <div *ngIf="mostrarAccion" class="flex flex-col gap-2">
+          <div class="flex gap-2">
+            <!-- Botón Agregar (más grande) -->
             <button
-              class="text-xs w-6 h-6 flex items-center justify-center rounded-full font-bold"
+              class="text-lg w-10 h-10 flex items-center justify-center rounded-full font-bold flex-shrink-0 transition-all"
               [ngClass]="{
-                'bg-black text-white': modoIngreso || stock > 0,
-                'bg-gray-400 text-gray-700 cursor-not-allowed opacity-60': !modoIngreso && stock === 0
+                'bg-green-500 text-white hover:bg-green-600 shadow-md': modoIngreso || stock > 0,
+                'bg-gray-300 text-gray-500 cursor-not-allowed opacity-50': !modoIngreso && stock === 0
               }"
               [disabled]="!modoIngreso && stock === 0"
-              (click)="accion.emit()"
-              aria-label="Agregar"
+              (click)="$event.stopPropagation(); accion.emit()"
+              aria-label="Agregar producto"
               title="Agregar"
             >
               +
             </button>
 
-            <!-- Botón Remover -->
+            <!-- Botón Remover (más grande) -->
             <button
-              class="bg-red-600 text-white text-xs w-6 h-6 flex items-center justify-center rounded-full"
-              (click)="remover.emit()"
-              aria-label="Remover"
+              class="bg-red-500 text-white text-lg w-10 h-10 flex items-center justify-center rounded-full font-bold flex-shrink-0 hover:bg-red-600 transition-all shadow-md"
+              (click)="$event.stopPropagation(); remover.emit()"
+              aria-label="Remover producto"
               title="Remover"
             >
-              -
+              −
             </button>
+
+            <button
+              class="bg-black text-white text-sm px-3 py-1 rounded-lg font-semibold hover:bg-gray-800 flex-grow"
+              (click)="$event.stopPropagation(); verDetalles.emit()"
+            >
+              Ver
+            </button>
+          </div>
+
+          <!-- Información de cantidad si está seleccionado -->
+          <div *ngIf="selected" class="bg-green-50 border border-green-300 rounded-lg p-2 text-center">
+            <p class="text-xs text-green-700 font-semibold">
+              <iconify-icon icon="mdi:check-circle" class="text-sm"></iconify-icon>
+              Seleccionado
+            </p>
           </div>
         </div>
       </div>
