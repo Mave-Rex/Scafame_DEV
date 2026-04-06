@@ -135,7 +135,7 @@ export class SelectProductsComponent implements OnInit {
     this.selectedIds = seleccionados.map(p => p.id);
 
     // Productos (sin área)
-    this.productService.getAll().subscribe((products: Product[]) => {
+    this.productService.getAll({ inStock: true }).subscribe((products: Product[]) => {
       this.productos = products.map(p => ({
         id: p.id,
         nombre: p.name,

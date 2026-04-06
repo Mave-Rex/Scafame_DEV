@@ -1,7 +1,6 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Observable, forkJoin } from 'rxjs';
-import { map } from 'rxjs/operators';
 
 import { environment } from '../../environments/environment.prod';
 
@@ -14,6 +13,11 @@ export interface CreateReportPayload {
   items: ReportItem[];
   type: 'income' | 'outcome';
   description?: string | null;
+}
+
+export interface ReportFilters {
+  type?: 'income' | 'outcome';
+  status?: 'pending' | 'approved' | 'rejected';
 }
 
 @Injectable({ providedIn: 'root' })
@@ -52,13 +56,28 @@ export class ReportService {
   }
 
   // ——————————— read ———————————
-  /** OJO: el backend actual NO filtra por query ?type=...; filtramos en cliente */
-  getAllByType(type: 'income' | 'outcome'): Observable<any[]> {
-    return this.getAll().pipe(map(list => list.filter(r => r?.type === type)));
+  getAllByType(
+    type: 'income' | 'outcome',
+    status?: 'pending' | 'approved' | 'rejected'
+  ): Observable<any[]> {
+    return this.getAll({ type, status });
   }
 
-  getAll(): Observable<any[]> {
-    return this.http.get<any[]>(this.API, { headers: this.getAuthHeaders() });
+  getAll(filters?: ReportFilters): Observable<any[]> {
+    let params = new HttpParams();
+
+    if (filters?.type) {
+      params = params.set('type', filters.type);
+    }
+
+    if (filters?.status) {
+      params = params.set('status', filters.status);
+    }
+
+    return this.http.get<any[]>(this.API, {
+      headers: this.getAuthHeaders(),
+      params,
+    });
   }
 
   getById(id: number): Observable<any> {

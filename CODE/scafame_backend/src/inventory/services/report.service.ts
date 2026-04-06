@@ -129,12 +129,17 @@ export class ReportService {
           .getMany();
 
         const lockMap = new Map<number, Product>(locked.map(p => [p.id, p]));
+        const updatedProducts: Product[] = [];
 
         for (const [pid, qty] of totals.entries()) {
           const p = lockMap.get(pid);
           if (!p) throw new BadRequestException(`Producto ${pid} no encontrado para ingreso`);
           (p as any).stock = Number((p as any).stock ?? 0) + qty;
-          await prodRepo.save(p);
+          updatedProducts.push(p);
+        }
+
+        if (updatedProducts.length > 0) {
+          await prodRepo.save(updatedProducts);
         }
 
         savedReport.status = ReportStatus.APPROVED;
@@ -149,8 +154,19 @@ export class ReportService {
     });
   }
 
-  async findAllReports() {
+  async findAllReports(filters?: { type?: ReportType; status?: ReportStatus }) {
+    const where: Partial<Pick<Report, 'type' | 'status'>> = {};
+
+    if (filters?.type) {
+      where.type = filters.type;
+    }
+
+    if (filters?.status) {
+      where.status = filters.status;
+    }
+
     return this.reportRepository.find({
+      where,
       relations: ['user', 'ProductReports', 'ProductReports.product'],
       order: { createdAt: 'DESC' as const },
     });
@@ -255,26 +271,41 @@ export class ReportService {
 
       const pmap = new Map<number, Product>(lockedProducts.map(p => [p.id, p]));
 
-      // 4) Validar stock con filas bloqueadas
+      // 4) Agrupar cantidades por producto y validar stock
+      const totalsByProduct = new Map<number, number>();
       for (const pr of lines) {
-        const prod = pmap.get((pr as any).product.id);
+        const pid = Number((pr as any).product?.id);
+        const qty = Number((pr as any).quantity ?? 0);
+        if (!Number.isInteger(pid) || pid <= 0) {
+          throw new BadRequestException('Línea con producto inválido');
+        }
+        totalsByProduct.set(pid, (totalsByProduct.get(pid) ?? 0) + qty);
+      }
+
+      for (const [pid, requiredQty] of totalsByProduct.entries()) {
+        const prod = pmap.get(pid);
         if (!prod) {
           throw new BadRequestException(
-            `Producto ${(pr as any).product?.name || (pr as any).product?.id} no encontrado`
+            `Producto ${pid} no encontrado`
           );
         }
-        if ((prod as any).stock < (pr as any).quantity) {
+        if ((prod as any).stock < requiredQty) {
           throw new BadRequestException(
-            `Stock insuficiente para ${(prod as any).name}: requiere ${(pr as any).quantity}, disponible ${(prod as any).stock}`
+            `Stock insuficiente para ${(prod as any).name}: requiere ${requiredQty}, disponible ${(prod as any).stock}`
           );
         }
       }
 
-      // 5) Descontar stock y guardar
-      for (const pr of lines) {
-        const prod = pmap.get((pr as any).product.id)!;
-        (prod as any).stock = Number((prod as any).stock ?? 0) - Number((pr as any).quantity ?? 0);
-        await runner.manager.getRepository(Product).save(prod);
+      // 5) Descontar stock y guardar por lote
+      const updatedProducts: Product[] = [];
+      for (const [pid, requiredQty] of totalsByProduct.entries()) {
+        const prod = pmap.get(pid)!;
+        (prod as any).stock = Number((prod as any).stock ?? 0) - requiredQty;
+        updatedProducts.push(prod);
+      }
+
+      if (updatedProducts.length > 0) {
+        await runner.manager.getRepository(Product).save(updatedProducts);
       }
 
       // 6) Marcar aprobado y asignar aprobador como user

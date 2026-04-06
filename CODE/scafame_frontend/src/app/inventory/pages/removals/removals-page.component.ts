@@ -68,10 +68,9 @@ export class RemovalsPageComponent {
   }
 
   checkWithdrawals() {
-    this.reportService.getAllByType('outcome').subscribe({
+    this.reportService.getAllByType('outcome', 'pending').subscribe({
       next: (reports) => {
-        const pendientes = reports.filter((r: any) => r.status?.toLowerCase() === 'pending');
-        if (pendientes.length > 0) {
+        if ((reports?.length ?? 0) > 0) {
           this.goTo('manage');
         } else {
           this.showNoWithdrawalsModal = true;

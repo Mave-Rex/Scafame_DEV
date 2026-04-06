@@ -613,31 +613,18 @@ export class EditarFormularioComponent implements OnInit {
       const continuarConImagen = () => {
         // 2) Subida o eliminación de imagen si corresponde
         if (this.imageFile) {
-          const fd = new FormData();
-          fd.append('image', this.imageFile);
-          // intenta updateWithImage -> uploadImage -> fallback
-          const anyService: any = this.productService as any;
-          if (typeof anyService.updateWithImage === 'function') {
-            anyService.updateWithImage(this.editedItem.id, fd).subscribe({
-              next: () => { this.toastr.success('Imagen actualizada'); this.postSave(); },
-              error: () => this.tryUploadFallback(fd)
-            });
-          } else {
-            this.tryUploadFallback(fd);
-          }
+          this.productService.updateWithImage(this.editedItem.id, payload as any, this.imageFile, false).subscribe({
+            next: () => { this.toastr.success('Imagen actualizada'); this.postSave(); },
+            error: () => { this.isSaving = false; this.toastr.error('No se pudo actualizar la imagen'); }
+          });
           return;
         }
 
         if (this.editedRemoveImage) {
-          const anyService: any = this.productService as any;
-          if (typeof anyService.removeImage === 'function') {
-            anyService.removeImage(this.editedItem.id).subscribe({
-              next: () => { this.toastr.success('Imagen eliminada'); this.postSave(); },
-              error: () => this.tryRemoveFallback()
-            });
-          } else {
-            this.tryRemoveFallback();
-          }
+          this.productService.updateWithImage(this.editedItem.id, payload as any, null, true).subscribe({
+            next: () => { this.toastr.success('Imagen eliminada'); this.postSave(); },
+            error: () => { this.isSaving = false; this.toastr.error('No se pudo eliminar la imagen'); }
+          });
           return;
         }
 
@@ -677,48 +664,17 @@ export class EditarFormularioComponent implements OnInit {
     this.toastr.info('Este formulario soporta Categoría, Producto o Unidad.', 'Aviso');
   }
 
-  private tryUploadFallback(fd: FormData) {
-    const anyService: any = this.productService as any;
-    if (typeof anyService.uploadImage === 'function') {
-      anyService.uploadImage(this.editedItem.id, fd).subscribe({
-        next: () => { this.toastr.success('Imagen actualizada'); this.postSave(); },
-        error: () => { this.isSaving = false; this.toastr.error('No se pudo actualizar la imagen'); }
-      });
-    } else {
-      // último recurso: intentar update con multipart si el backend lo soporta
-      const fd2 = new FormData();
-      fd2.append('name', (this.editedItem.nombre || '').trim());
-      fd2.append('description', (this.editedItem.descripcion || '').trim());
-      if (this.editedItem.categoriaId != null) fd2.append('productCategoryId', String(this.editedItem.categoriaId));
-      if (this.editedItem.unidadId != null) fd2.append('unitId', String(this.editedItem.unidadId));
-      fd2.append('image', this.imageFile as Blob);
-      if (typeof anyService.update === 'function') {
-        anyService.update(this.editedItem.id, fd2).subscribe({
-          next: () => { this.toastr.success('Imagen actualizada'); this.postSave(); },
-          error: () => { this.isSaving = false; this.toastr.error('No se pudo actualizar la imagen'); }
-        });
-      } else {
-        this.isSaving = false;
-        this.toastr.error('No hay método disponible para subir imagen');
+  private postSave() {
+    const hadImageMutation = !!this.imageFile || this.editedRemoveImage;
+
+    if (hadImageMutation) {
+      try {
+        localStorage.setItem('scafame_img_v', String(Date.now()));
+      } catch {
+        // Ignore storage errors; image update still persists on backend.
       }
     }
-  }
 
-  private tryRemoveFallback() {
-    // Si no hay endpoint dedicado, intenta update con imageUrl null
-    const anyService: any = this.productService as any;
-    if (typeof anyService.update === 'function') {
-      anyService.update(this.editedItem.id, { imageUrl: null }).subscribe({
-        next: () => { this.toastr.success('Imagen eliminada'); this.postSave(); },
-        error: () => { this.isSaving = false; this.toastr.error('No se pudo eliminar la imagen'); }
-      });
-    } else {
-      this.isSaving = false;
-      this.toastr.error('No hay método disponible para eliminar imagen');
-    }
-  }
-
-  private postSave() {
     this.cargarDatos();
     this.selectedItem = { ...this.editedItem };
 

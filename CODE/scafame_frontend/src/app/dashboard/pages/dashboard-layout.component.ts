@@ -25,28 +25,38 @@ import { FooterComponent } from '../../shared/components/footer/footer.component
         class="fixed top-0 left-0 h-screen w-64 bg-black z-40 transform transition-transform duration-300 lg:hidden"
         [class.-translate-x-full]="!showSidebarMobile"
         (click)="$event.stopPropagation()">
-        <app-sidebar></app-sidebar>
+        <app-sidebar [collapsed]="false"></app-sidebar>
       </div>
 
       <!-- SIDEBAR FIJO EN PANTALLAS GRANDES -->
-      <div class="hidden lg:block fixed top-0 left-0 h-screen w-64 z-20">
-        <app-sidebar></app-sidebar>
+      <div
+        class="hidden lg:block fixed top-0 left-0 h-screen z-20 transition-all duration-300"
+        [class.w-20]="sidebarCollapsed"
+        [class.w-64]="!sidebarCollapsed"
+      >
+        <app-sidebar
+          [collapsed]="sidebarCollapsed"
+          [enableToggle]="true"
+          (toggleCollapse)="toggleDesktopSidebar()"
+        ></app-sidebar>
       </div>
 
       <!-- HEADER -->
       <header class="w-full z-10">
-        <app-header (toggleSidebar)="showSidebarMobile = true" />
+        <app-header
+          (toggleSidebar)="showSidebarMobile = true"
+        />
       </header>
 
       <!-- LOGO SUPERIOR DERECHO -->
-      <div class="absolute top-12 right-7 z-20 hidden lg:block">
+      <div class="absolute top-16 right-7 z-20 hidden lg:block">
         <img src="/fame_logo.png" alt="FAME Logo" class="h-16" />
       </div>
 
       <!-- MAIN -->
       <main
         class="flex-1 bg-white p-6 transition-all duration-300"
-        [class.lg:ml-64]="true"
+        [style.marginLeft.px]="isSidebarHamburger ? 0 : (sidebarCollapsed ? 80 : 256)"
       >
         <div class="max-w-[1200px] mx-auto w-full">
           <router-outlet></router-outlet>
@@ -55,7 +65,11 @@ import { FooterComponent } from '../../shared/components/footer/footer.component
       
       <!-- FOOTER en flujo normal (no fijo) -->
       <div class="w-full transition-all duration-300">
-        <div class="w-full lg:ml-64 lg:w-[calc(100%-16rem)]">
+        <div
+          class="w-full"
+          [style.marginLeft.px]="isSidebarHamburger ? 0 : (sidebarCollapsed ? 80 : 256)"
+          [style.width]="isSidebarHamburger ? '100%' : (sidebarCollapsed ? 'calc(100% - 80px)' : 'calc(100% - 256px)')"
+        >
           <div class="w-full">
             <app-footer></app-footer>
           </div>
@@ -67,6 +81,7 @@ import { FooterComponent } from '../../shared/components/footer/footer.component
 export class DashboardLayoutComponent {
   showSidebarMobile = false;
   isSidebarHamburger = false;
+  sidebarCollapsed = true;
 
   constructor() {
     this.updateSidebarMode();
@@ -75,5 +90,9 @@ export class DashboardLayoutComponent {
 
   updateSidebarMode() {
     this.isSidebarHamburger = window.innerWidth < 1024;
+  }
+
+  toggleDesktopSidebar() {
+    this.sidebarCollapsed = !this.sidebarCollapsed;
   }
 }

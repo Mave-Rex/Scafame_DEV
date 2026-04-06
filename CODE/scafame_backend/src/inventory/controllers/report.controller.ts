@@ -1,6 +1,6 @@
 import {
   Controller, Post, Body, Get, Param, Delete, UseGuards, Request,
-  Patch, ParseIntPipe, BadRequestException,
+  Patch, ParseIntPipe, BadRequestException, Query,
 } from '@nestjs/common';
 import { ReportService } from '../services/report.service';
 import { CreateReportDto } from '../../dtos/create-report.dto';
@@ -8,7 +8,7 @@ import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from '../../entities/user.entity';
 import { Repository } from 'typeorm';
-import { ReportType } from '../../entities/report.entity';
+import { ReportType, ReportStatus } from '../../entities/report.entity';
 
 @Controller('reports')
 export class ReportController {
@@ -95,8 +95,25 @@ export class ReportController {
   }
 
   @Get()
-  findAll() {
-    return this.reportService.findAllReports();
+  findAll(
+    @Query('type') type?: string,
+    @Query('status') status?: string,
+  ) {
+    const normalizedType = type?.toLowerCase();
+    const normalizedStatus = status?.toLowerCase();
+
+    if (normalizedType && !Object.values(ReportType).includes(normalizedType as ReportType)) {
+      throw new BadRequestException('Invalid report type.');
+    }
+
+    if (normalizedStatus && !Object.values(ReportStatus).includes(normalizedStatus as ReportStatus)) {
+      throw new BadRequestException('Invalid report status.');
+    }
+
+    return this.reportService.findAllReports({
+      type: normalizedType as ReportType | undefined,
+      status: normalizedStatus as ReportStatus | undefined,
+    });
   }
 
   @Get(':id')

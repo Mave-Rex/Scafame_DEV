@@ -115,13 +115,9 @@ export class ManageRemovalsComponent implements OnInit {
   }
 
   loadReports() {
-    this.reportService.getAllByType('outcome').subscribe({
+    this.reportService.getAllByType('outcome', 'pending').subscribe({
       next: (reports) => {
         this.withdrawals = (reports ?? [])
-          .filter((r: any) =>
-            (r.type?.toLowerCase?.() === 'outcome') &&
-            (r.status?.toLowerCase?.() === 'pending')
-          )
           .map((r: any) => ({
             id: String(r.id),
             fecha: this.formatDate(r.createdAt),

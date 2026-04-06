@@ -4,9 +4,8 @@ import { CommonModule } from '@angular/common';
 import { ButtonComponent } from '../../shared/components/button/button.component';
 import { ProductTableComponent } from '../../shared/components/table/product-table.component';
 
-import { ProductService, Product } from '../../services/product.service';
+import { ProductService, ProductsPage } from '../../services/product.service';
 import { CategoryService, Category } from '../../services/category.service';
-import { Unit } from '../../services/unit.service';
 
 import { normalizeImage } from '../../shared/utils/url.util';
 
@@ -21,6 +20,27 @@ import { normalizeImage } from '../../shared/utils/url.util';
         <div class="flex flex-col items-center text-center">
           <h1 class="text-4xl font-bold text-black mb-6 mt-2">Inventario</h1>
 
+          <div class="w-full mb-4 border border-gray-200 rounded-lg bg-white px-3 py-2 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div class="text-sm text-black">
+              Mostrando página {{ currentPage }} de {{ totalPages }} ({{ totalItems }} productos)
+            </div>
+            <div class="flex items-center gap-2">
+              <button
+                class="px-3 py-1 rounded border border-black disabled:opacity-40"
+                [disabled]="currentPage <= 1"
+                (click)="goToPage(currentPage - 1)">
+                Anterior
+              </button>
+              <button
+                class="px-3 py-1 rounded border border-black disabled:opacity-40"
+                [disabled]="currentPage >= totalPages"
+                (click)="goToPage(currentPage + 1)">
+                Siguiente
+              </button>
+              <app-button label="Volver" variant="light" (click)="goBack()"></app-button>
+            </div>
+          </div>
+
           <app-product-table
             [productos]="productos"
             [categorias]="categorias"
@@ -30,10 +50,6 @@ import { normalizeImage } from '../../shared/utils/url.util';
             (agregar)="handleAgregar($event)"
             (remover)="handleRemover($event)"
           ></app-product-table>
-
-          <div class="w-full mt-4 md:-mt-9 md:px-100 flex justify-center md:justify-end">
-            <app-button label="Volver" variant="light" (click)="goBack()"></app-button>
-          </div>
         </div>
       </div>
     </main>
@@ -48,6 +64,10 @@ export class ViewInventoryComponent implements OnInit {
     imagen?: string | null;
   }[] = [];
   categorias: string[] = [];
+  currentPage = 1;
+  pageSize = 20;
+  totalPages = 1;
+  totalItems = 0;
 
   constructor(
     private productService: ProductService,
@@ -55,23 +75,35 @@ export class ViewInventoryComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
-    this.loadData();
+    this.loadCategorias();
+    this.loadData(this.currentPage);
   }
 
-  loadData(): void {
-    this.productService.getAll().subscribe((products) => {
-      this.productos = products.map((p) => ({
+  loadData(page: number): void {
+    this.productService.getPage(page, this.pageSize).subscribe((resp: ProductsPage) => {
+      this.productos = resp.items.map((p) => ({
         nombre: p.name,
         stock: p.stock,
         categoria: p.productCategory?.name ?? '',
         unidad: (p.unit?.abbreviation || p.unit?.name) ?? '',
         imagen: normalizeImage(p.imageUrl),
       }));
-    });
 
+      this.currentPage = resp.page;
+      this.totalPages = resp.totalPages;
+      this.totalItems = resp.total;
+    });
+  }
+
+  loadCategorias(): void {
     this.categoryService.getAll().subscribe((categories: Category[]) => {
       this.categorias = categories.map((c) => c.name);
     });
+  }
+
+  goToPage(page: number): void {
+    if (page < 1 || page > this.totalPages) return;
+    this.loadData(page);
   }
 
   handleVerDetalles(producto: any): void {

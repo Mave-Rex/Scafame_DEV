@@ -1,6 +1,6 @@
 import {
   Entity, PrimaryGeneratedColumn, Column, CreateDateColumn,
-  ManyToOne, OneToMany, Check
+  ManyToOne, OneToMany, Check, Index
 } from 'typeorm';
 import { ProductCategory } from './productCategory.entity';
 import { ProductReport } from './productReport.entity';
@@ -8,6 +8,8 @@ import { Unit } from './unit.entity';
 
 @Entity()
 @Check('"stock" >= 0')
+@Index('idx_product_stock', ['stock'])
+@Index('idx_product_created_at', ['creationDate'])
 export class Product {
   @PrimaryGeneratedColumn()
   id: number;
@@ -25,14 +27,16 @@ export class Product {
   description: string;
 
   @Column({ nullable: true })
-  imageUrl: string;
+  imageUrl: string | null;
 
   @CreateDateColumn()
   creationDate: Date;
 
+  @Index('idx_product_category_fk')
   @ManyToOne(() => ProductCategory, (category) => category.products, { eager: true, nullable: false })
   productCategory: ProductCategory;
 
+  @Index('idx_product_unit_fk')
   @ManyToOne(() => Unit, { eager: true, nullable: true })
   unit?: Unit | null;
 

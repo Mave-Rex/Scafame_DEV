@@ -1,9 +1,29 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Product } from '../../entities/product.entity';
 import { ProductCategory } from '../../entities/productCategory.entity';
 import { Unit } from '../../entities/unit.entity';
+
+type ProductFilters = {
+  q?: string;
+  categoryId?: number;
+  inStock?: boolean;
+  lowStock?: boolean;
+};
+
+type ProductPagination = {
+  page: number;
+  limit: number;
+};
+
+export type PaginatedProductsResult = {
+  items: Product[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+};
 
 @Injectable()
 export class ProductService {
@@ -17,6 +37,34 @@ export class ProductService {
     @InjectRepository(Unit)
     private unitRepository: Repository<Unit>,
   ) {}
+
+  private buildFilteredProductsQuery(filters?: ProductFilters) {
+    const qb = this.productRepository
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.productCategory', 'productCategory')
+      .leftJoinAndSelect('product.unit', 'unit')
+      .orderBy('product.name', 'ASC');
+
+    if (filters?.categoryId !== undefined) {
+      qb.andWhere('productCategory.id = :categoryId', { categoryId: filters.categoryId });
+    }
+
+    if (filters?.inStock) {
+      qb.andWhere('product.stock > 0');
+    }
+
+    if (filters?.lowStock) {
+      qb.andWhere('product.stock <= product.minimumStock');
+    }
+
+    if (filters?.q) {
+      qb.andWhere('(LOWER(product.name) LIKE :q OR LOWER(COALESCE(product.description, "")) LIKE :q)', {
+        q: `%${filters.q.toLowerCase()}%`,
+      });
+    }
+
+    return qb;
+  }
 
   async createProduct(data: {
     name: string;
@@ -52,8 +100,30 @@ export class ProductService {
     return await this.productRepository.save(product);
   }
 
-  async findAllProducts() {
-    return await this.productRepository.find(); // unit llega por eager=true
+  async findAllProducts(filters?: ProductFilters) {
+    const qb = this.buildFilteredProductsQuery(filters);
+    return await qb.getMany();
+  }
+
+  async findProductsPage(
+    filters: ProductFilters | undefined,
+    pagination: ProductPagination,
+  ): Promise<PaginatedProductsResult> {
+    const page = Math.max(1, pagination.page);
+    const limit = Math.max(1, Math.min(100, pagination.limit));
+    const skip = (page - 1) * limit;
+
+    const qb = this.buildFilteredProductsQuery(filters);
+    const [items, total] = await qb.skip(skip).take(limit).getManyAndCount();
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages,
+    };
   }
 
   async findProductById(id: number) {
@@ -69,7 +139,7 @@ export class ProductService {
       productCategoryId?: number;
       minimumStock?: number;
       description?: string;
-      imageUrl?: string;
+      imageUrl?: string | null;
       unitId?: number | null; // NUEVO
     },
   ) {

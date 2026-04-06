@@ -20,23 +20,6 @@ import { normalizeImage } from '../../../shared/utils/url.util';
   template: `
 <main class="flex-1 bg-white p-6 md:p-8 font-display overflow-x-hidden overflow-y-auto">
   <div class="max-w-[1100px] mx-auto relative min-h-full flex flex-col justify-start">
-    <!-- Indicador compacto: Ingresos -->
-    <div
-      *ngIf="selectedProducts.length > 0"
-      class="fixed top-20 right-6 z-40 flex items-center bg-black text-white px-3 py-2 rounded-md shadow-md
-             md:absolute md:top-14 md:-right-5 md:mt-0 md:mr-0"
-      role="status"
-      [attr.aria-label]="'Ingresos: ' + selectedProducts.length"
-      [attr.title]="'Ingresos: ' + selectedProducts.length"
-    >
-      <div class="relative flex items-center">
-        <iconify-icon icon="mdi:package-variant-plus" width="25" height="25"></iconify-icon>
-        <span class="ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1 text-[10px] font-semibold rounded-full bg-white text-black">
-          {{ selectedProducts.length }}
-        </span>
-      </div>
-    </div>
-
     <div class="flex flex-col items-center text-center">
       <h1 class="text-4xl font-bold text-black mb-6 mt-2">Realizar ingresos</h1>
 
@@ -44,6 +27,21 @@ import { normalizeImage } from '../../../shared/utils/url.util';
       <div
         class="w-full mb-4 sticky top-2 z-30 bg-white/95 backdrop-blur-sm rounded-xl py-2 flex flex-col sm:flex-row gap-3 items-center sm:justify-end"
       >
+        <div
+          *ngIf="selectedProducts.length > 0"
+          class="sm:mr-auto flex items-center bg-black text-white px-3 py-2 rounded-md shadow-md"
+          role="status"
+          [attr.aria-label]="'Ingresos: ' + selectedProducts.length"
+          [attr.title]="'Ingresos: ' + selectedProducts.length"
+        >
+          <div class="relative flex items-center">
+            <iconify-icon icon="mdi:package-variant-plus" width="22" height="22"></iconify-icon>
+            <span class="ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1 text-[10px] font-semibold rounded-full bg-white text-black">
+              {{ selectedProducts.length }}
+            </span>
+          </div>
+        </div>
+
         <app-button label="Volver" variant="light" (click)="onGoBack()"></app-button>
         <app-button
           label="Ver ingreso"

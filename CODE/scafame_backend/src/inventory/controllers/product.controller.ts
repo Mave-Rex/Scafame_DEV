@@ -10,6 +10,7 @@ import {
   UseInterceptors,
   ParseIntPipe,
   BadRequestException,
+  Query,
 } from '@nestjs/common';
 import { ProductService } from '../services/product.service';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -101,8 +102,56 @@ export class ProductController {
 
   // ---------- READ ----------
   @Get()
-  findAll() {
-    return this.productService.findAllProducts();
+  findAll(
+    @Query('q') q?: string,
+    @Query('categoryId') categoryId?: string,
+    @Query('inStock') inStock?: string,
+    @Query('lowStock') lowStock?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const parsedCategoryId =
+      categoryId !== undefined && categoryId !== '' ? Number(categoryId) : undefined;
+
+    if (parsedCategoryId !== undefined && Number.isNaN(parsedCategoryId)) {
+      throw new BadRequestException('categoryId debe ser numérico.');
+    }
+
+    const toBoolean = (value?: string): boolean | undefined => {
+      if (value === undefined) return undefined;
+      const normalized = String(value).toLowerCase();
+      if (normalized === 'true' || normalized === '1') return true;
+      if (normalized === 'false' || normalized === '0') return false;
+      throw new BadRequestException('Parámetro booleano inválido. Usa true/false o 1/0.');
+    };
+
+    const parsePositiveInt = (value?: string): number | undefined => {
+      if (value === undefined || value === '') return undefined;
+      const parsed = Number(value);
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        throw new BadRequestException('Parámetro de paginación inválido. Usa enteros mayores a 0.');
+      }
+      return parsed;
+    };
+
+    const parsedPage = parsePositiveInt(page);
+    const parsedLimit = parsePositiveInt(limit);
+
+    const filters = {
+      q: q?.trim() || undefined,
+      categoryId: parsedCategoryId,
+      inStock: toBoolean(inStock),
+      lowStock: toBoolean(lowStock),
+    };
+
+    if (parsedPage !== undefined || parsedLimit !== undefined) {
+      return this.productService.findProductsPage(filters, {
+        page: parsedPage ?? 1,
+        limit: parsedLimit ?? 20,
+      });
+    }
+
+    return this.productService.findAllProducts(filters);
   }
 
   @Get(':id')
@@ -124,6 +173,7 @@ export class ProductController {
       description?: string;
       unitId?: number | string | null; // null = quitar unidad
       imageUrl?: string; // opcional, si no suben archivo, puedes permitir setear una URL directa
+      removeImage?: boolean | string;
     },
   ) {
     const dto: {
@@ -132,7 +182,7 @@ export class ProductController {
       minimumStock?: number;
       description?: string;
       unitId?: number | null;
-      imageUrl?: string;
+      imageUrl?: string | null;
     } = {};
 
     if (body.name !== undefined) dto.name = body.name;
@@ -164,8 +214,12 @@ export class ProductController {
     }
 
     // Imagen: si suben archivo nuevo, priorizamos ese.
+    const shouldRemoveImage = body.removeImage === true || body.removeImage === 'true';
+
     if (file) {
       dto.imageUrl = `/uploads/${file.filename}`;
+    } else if (shouldRemoveImage) {
+      dto.imageUrl = null;
     } else if (body.imageUrl !== undefined) {
       dto.imageUrl = body.imageUrl;
     }

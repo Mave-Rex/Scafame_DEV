@@ -12,10 +12,8 @@ import { FormsModule } from '@angular/forms';
 
 import {
   Chart,
-  BarController,
-  BarElement,
-  CategoryScale,
-  LinearScale,
+  PieController,
+  ArcElement,
   Tooltip,
   Legend,
 } from 'chart.js';
@@ -23,7 +21,7 @@ import {
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { InventoryReportService, ProductDto } from '../../../services/inventory-report.service';
 
-Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip, Legend);
+Chart.register(PieController, ArcElement, Tooltip, Legend);
 
 @Component({
   selector: 'app-dashboard',
@@ -219,13 +217,16 @@ Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip, L
             <h2 class="text-2xl font-bold text-black">
               {{ hasCategorySelected ? ('Stock por producto - ' + filterCategory) : 'Stock por categoría' }}
             </h2>
-            <span class="text-sm text-black/60">Barras</span>
+            <span class="text-sm text-black/60">Pastel</span>
           </div>
 
-          <!-- overflow-x-auto para labels largos -->
-          <div class="h-[420px] overflow-x-auto">
-            <canvas #chartCanvas class="min-w-[900px]"></canvas>
+          <div class="h-[420px] flex items-center justify-center">
+            <canvas #chartCanvas class="max-w-[560px] max-h-[380px]"></canvas>
           </div>
+
+          <p *ngIf="chartInfoMessage" class="text-center text-sm text-black/60 mt-2">
+            {{ chartInfoMessage }}
+          </p>
 
           <p class="text-sm text-black/60 mt-4">
             *{{ hasCategorySelected ? 'Se muestran productos filtrados dentro de la categoría.' : 'Vista general del stock total por categoría.' }}
@@ -256,6 +257,7 @@ export class InventoryDashboardComponent implements AfterViewInit, OnDestroy {
   totalProducts = 0;
   totalUnits = 0;
   lowStockCount = 0;
+  chartInfoMessage = '';
 
   constructor(
     private readonly inv: InventoryReportService,
@@ -421,6 +423,14 @@ export class InventoryDashboardComponent implements AfterViewInit, OnDestroy {
   private renderChart(labels: string[], values: number[]): void {
     this.chart?.destroy();
 
+    if (!labels.length) {
+      this.chartInfoMessage = 'No hay datos para mostrar con los filtros actuales.';
+      return;
+    }
+
+    const totalValue = values.reduce((acc, value) => acc + (value || 0), 0);
+    const noStockData = totalValue <= 0;
+
     const palette = [
       '#0F766E',
       '#0891B2',
@@ -433,37 +443,34 @@ export class InventoryDashboardComponent implements AfterViewInit, OnDestroy {
       '#15803D',
       '#374151',
     ];
-    const colors = labels.map((_, i) => palette[i % palette.length]);
+    const colors = noStockData
+      ? ['#9CA3AF']
+      : labels.map((_, i) => palette[i % palette.length]);
+
+    const chartLabels = noStockData ? ['Sin stock'] : labels;
+    const chartValues = noStockData ? [1] : values;
+    this.chartInfoMessage = noStockData
+      ? 'Todos los productos filtrados tienen stock 0.'
+      : '';
 
     this.chart = new Chart(this.chartCanvas.nativeElement, {
-      type: 'bar',
+      type: 'pie',
       data: {
-        labels,
+        labels: chartLabels,
         datasets: [{
           label: 'Stock total',
-          data: values,
+          data: chartValues,
           backgroundColor: colors,
           borderColor: '#111827',
           borderWidth: 1,
-          borderRadius: 6,
         }],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { display: true },
+          legend: { display: true, position: 'right' },
           tooltip: { enabled: true },
-        },
-        scales: {
-          y: { beginAtZero: true },
-          x: {
-            ticks: {
-              maxRotation: 45,
-              minRotation: 45,
-              autoSkip: false,
-            },
-          },
         },
       },
     });
