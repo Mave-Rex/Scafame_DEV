@@ -57,3 +57,39 @@ Angular CLI does not come with an end-to-end testing framework by default. You c
 ## Additional Resources
 
 For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+
+## Cambios recientes de interfaz (Sidebar)
+
+Se aplicaron mejoras de experiencia de usuario en la barra lateral (desktop), enfocadas en reducir movimientos bruscos durante expandir/colapsar:
+
+1. Reimplementación de expandir/colapsar por hover.
+2. Alineación estable de iconos de navegación entre estado colapsado y expandido.
+3. Posición vertical consistente de botones (Inventario/Usuarios) usando altura mínima fija en la sección de usuario.
+4. Separación visual adicional entre perfil y navegación.
+5. Centrados de iconos en modo colapsado.
+6. Suavizado del contenido textual (perfil y etiquetas) para evitar quiebres durante la transición de ancho.
+7. Footer desacoplado del ancho dinámico del sidebar para eliminar animación brusca.
+8. Animación del icono de usuario refinada con escala y opacidad (sin salto abrupto de tamaño).
+
+Archivos impactados:
+
+- src/app/shared/components/sidebar/sidebar.component.ts
+- src/app/dashboard/pages/dashboard-layout.component.ts
+
+## Evaluación rápida de código
+
+Estado actual: limpio a nivel de compilación en los archivos modificados (sin errores de Angular/TypeScript reportados durante los cambios).
+
+Puntos positivos:
+
+1. Se mantuvo la estructura del componente y no se introdujo lógica innecesaria.
+2. Cambios acotados a clases/utilidades de estilo y bindings simples.
+3. Buena separación entre comportamiento de layout (layout component) y apariencia del sidebar (sidebar component).
+
+Oportunidades de mejora recomendadas:
+
+1. Mover estilos de template inline a un archivo de estilos dedicado del componente para facilitar mantenimiento.
+2. Reemplazar listeners de window directos por HostListener y limpiar listeners en ngOnDestroy.
+3. Agregar pruebas visuales/e2e de estados del sidebar (colapsado/expandido, hover, mobile).
+4. Definir tokens de duración/easing (variables CSS) para unificar animaciones en toda la app.
+5. Validar accesibilidad del modo hover con alternativa de teclado (focus/blur) para usuarios no mouse.

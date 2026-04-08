@@ -23,7 +23,9 @@ const storage = diskStorage({
   destination: './uploads',
   filename: (_req, file, cb) => {
     const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, unique + extname(file.originalname));
+    // Normalizar extensiones JPEG (jfif, jpe, etc.) a .jpg para compatibilidad universal con navegadores
+    const ext = /^image\/jpe?g$/i.test(file.mimetype) ? '.jpg' : extname(file.originalname).toLowerCase();
+    cb(null, unique + ext);
   },
 });
 

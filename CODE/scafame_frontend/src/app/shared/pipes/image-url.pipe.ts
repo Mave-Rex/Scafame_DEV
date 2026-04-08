@@ -15,15 +15,15 @@ export class ImageUrlPipe implements PipeTransform {
     const path = rawPath.replace(/^\/+/, '');
     let resolved = `${base}/${path}`;
 
-    if (rawQuery) {
-      resolved += `?${rawQuery}`;
-    }
-
     if (/^uploads\//i.test(path)) {
       const version = this.getImageVersion();
       if (version) {
         resolved += (resolved.includes('?') ? '&' : '?') + `v=${encodeURIComponent(version)}`;
       }
+    }
+
+    if (rawQuery) {
+      resolved += (resolved.includes('?') ? '&' : '?') + rawQuery;
     }
 
     return resolved;

@@ -63,8 +63,9 @@ import { ImageUrlPipe } from '../../pipes/image-url.pipe';
           </thead>
           <tbody>
             <tr
-              *ngFor="let producto of filteredProductos"
+              *ngFor="let producto of filteredProductos; trackBy: trackByProducto"
               class="border-b border-gray-100 hover:bg-gray-50"
+              [class.bg-emerald-50]="!!producto.selected"
             >
               <td *ngIf="showAddButton && modoIngreso" class="px-3 py-2 text-center align-middle">
                 <input
@@ -82,7 +83,9 @@ import { ImageUrlPipe } from '../../pipes/image-url.pipe';
                     [src]="producto.imagen | imageUrl"
                     [alt]="producto.nombre"
                     class="w-full h-full object-cover"
+                    (error)="$any($event.target).style.display='none'; $any($event.target.parentElement).querySelector('.img-fallback')?.classList.remove('hidden')"
                   />
+                  <div class="img-fallback hidden w-full h-full flex items-center justify-center text-[10px] text-gray-500">Sin img</div>
                   <ng-template #noImage>
                     <div class="w-full h-full flex items-center justify-center text-[10px] text-gray-500">Sin img</div>
                   </ng-template>
@@ -153,7 +156,9 @@ import { ImageUrlPipe } from '../../pipes/image-url.pipe';
               [src]="selectedProduct?.imagen | imageUrl"
               [alt]="selectedProduct?.nombre || 'Imagen del producto'"
               class="w-full h-full object-cover"
+              (error)="$any($event.target).style.display='none'; $any($event.target.parentElement).querySelector('.modal-img-fallback')?.classList.remove('hidden')"
             />
+            <div class="modal-img-fallback hidden w-full h-full flex items-center justify-center text-[11px] text-gray-500">Sin imagen</div>
             <ng-template #noModalImage>
               <div class="w-full h-full flex items-center justify-center text-[11px] text-gray-500">Sin imagen</div>
             </ng-template>
@@ -286,5 +291,13 @@ export class ProductTableComponent implements OnChanges {
   closeModal() {
     this.selectedProduct = null;
     this.showModal = false;
+  }
+
+  /**
+   * TrackBy para *ngFor de productos
+   * Evita que Angular rerendeice las filas cuando la lista se actualiza
+   */
+  trackByProducto(_index: number, producto: any): string {
+    return producto.nombre;
   }
 }

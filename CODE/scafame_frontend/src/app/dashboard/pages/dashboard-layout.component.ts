@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterOutlet } from '@angular/router';
 import { SidebarComponent } from '../../shared/components/sidebar/sidebar.component';
@@ -33,11 +33,11 @@ import { FooterComponent } from '../../shared/components/footer/footer.component
         class="hidden lg:block fixed top-0 left-0 h-screen z-20 transition-all duration-300"
         [class.w-20]="sidebarCollapsed"
         [class.w-64]="!sidebarCollapsed"
+        (mouseenter)="sidebarCollapsed = false"
+        (mouseleave)="sidebarCollapsed = true"
       >
         <app-sidebar
           [collapsed]="sidebarCollapsed"
-          [enableToggle]="true"
-          (toggleCollapse)="toggleDesktopSidebar()"
         ></app-sidebar>
       </div>
 
@@ -63,36 +63,30 @@ import { FooterComponent } from '../../shared/components/footer/footer.component
         </div>
       </main>
       
-      <!-- FOOTER en flujo normal (no fijo) -->
-      <div class="w-full transition-all duration-300">
-        <div
-          class="w-full"
-          [style.marginLeft.px]="isSidebarHamburger ? 0 : (sidebarCollapsed ? 80 : 256)"
-          [style.width]="isSidebarHamburger ? '100%' : (sidebarCollapsed ? 'calc(100% - 80px)' : 'calc(100% - 256px)')"
-        >
-          <div class="w-full">
-            <app-footer></app-footer>
-          </div>
-        </div>
+      <!-- FOOTER fijo visualmente: no se adapta al ancho del sidebar -->
+      <div class="w-full">
+        <app-footer></app-footer>
       </div>
     </div>
   `
 })
-export class DashboardLayoutComponent {
+export class DashboardLayoutComponent implements OnInit, OnDestroy {
   showSidebarMobile = false;
   isSidebarHamburger = false;
   sidebarCollapsed = true;
 
-  constructor() {
+  private readonly onResize = () => this.updateSidebarMode();
+
+  ngOnInit() {
     this.updateSidebarMode();
-    window.addEventListener('resize', this.updateSidebarMode.bind(this));
+    window.addEventListener('resize', this.onResize);
+  }
+
+  ngOnDestroy() {
+    window.removeEventListener('resize', this.onResize);
   }
 
   updateSidebarMode() {
     this.isSidebarHamburger = window.innerWidth < 1024;
-  }
-
-  toggleDesktopSidebar() {
-    this.sidebarCollapsed = !this.sidebarCollapsed;
   }
 }
