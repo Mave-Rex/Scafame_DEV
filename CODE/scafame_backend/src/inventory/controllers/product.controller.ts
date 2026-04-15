@@ -15,12 +15,18 @@ import {
 import { ProductService } from '../services/product.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { extname, join } from 'path';
 import { Express } from 'express';
+import { existsSync, mkdirSync } from 'fs';
 
 // ---- Configuración de subida de imágenes ----
+const UPLOADS_DIR = join(process.cwd(), 'uploads');
+if (!existsSync(UPLOADS_DIR)) {
+  mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
 const storage = diskStorage({
-  destination: './uploads',
+  destination: UPLOADS_DIR,
   filename: (_req, file, cb) => {
     const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
     // Normalizar extensiones JPEG (jfif, jpe, etc.) a .jpg para compatibilidad universal con navegadores

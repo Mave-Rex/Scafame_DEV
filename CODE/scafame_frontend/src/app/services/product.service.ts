@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
-import { map, shareReplay, tap } from 'rxjs/operators';
+import { Observable, of } from 'rxjs';
+import { map, shareReplay, switchMap, tap } from 'rxjs/operators';
 
 import { environment } from '../../environments/environment.prod';
 
@@ -111,21 +111,84 @@ export class ProductService {
     }
 
     return this.http.get<ProductsPage | Product[]>(API, { params }).pipe(
-      map((resp) => {
-        // Compatibilidad: si el backend aún responde array (sin paginación), adaptamos al contrato paginado.
+      switchMap((resp) => {
+        // Compatibilidad: si backend responde array (sin paginación), paginamos localmente.
         if (Array.isArray(resp)) {
-          const total = resp.length;
-          return {
-            items: resp,
-            total,
-            page: 1,
-            limit: total > 0 ? total : limit,
-            totalPages: 1,
-          } as ProductsPage;
+          return of(this.paginate(this.applyClientFilters(resp, filters), page, limit));
         }
-        return resp;
+
+        const items = resp.items ?? [];
+        const filteredItems = this.applyClientFilters(items, filters);
+
+        // Si los filtros no se reflejan en la página recibida, hacemos fallback a listado filtrado completo.
+        const hasFilters = !!(filters?.q || filters?.categoryId !== undefined || filters?.inStock !== undefined || filters?.lowStock !== undefined);
+        const serverPageLooksUnfiltered = hasFilters && filteredItems.length !== items.length;
+
+        if (serverPageLooksUnfiltered) {
+          return this.getAll(filters).pipe(
+            map((all) => this.paginate(this.applyClientFilters(all, filters), page, limit)),
+          );
+        }
+
+        return of({
+          items,
+          total: resp.total ?? items.length,
+          page: resp.page ?? page,
+          limit: resp.limit ?? limit,
+          totalPages: resp.totalPages ?? Math.max(1, Math.ceil((resp.total ?? items.length) / (resp.limit ?? limit))),
+        } as ProductsPage);
       }),
     );
+  }
+
+  private paginate(items: Product[], page: number, limit: number): ProductsPage {
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.max(1, limit);
+    const total = items.length;
+    const start = (safePage - 1) * safeLimit;
+    const pagedItems = items.slice(start, start + safeLimit);
+    const totalPages = Math.max(1, Math.ceil(total / safeLimit));
+
+    return {
+      items: pagedItems,
+      total,
+      page: safePage,
+      limit: safeLimit,
+      totalPages,
+    };
+  }
+
+  private applyClientFilters(items: Product[], filters?: ProductFilters): Product[] {
+    if (!filters) return items;
+
+    const q = (filters.q ?? '').trim().toLowerCase();
+    const categoryId = filters.categoryId;
+    const requireInStock = filters.inStock === true;
+    const requireLowStock = filters.lowStock === true;
+
+    return items.filter((p) => {
+      if (categoryId !== undefined && p.productCategory?.id !== categoryId) {
+        return false;
+      }
+
+      if (requireInStock && !(Number(p.stock) > 0)) {
+        return false;
+      }
+
+      if (requireLowStock && !(Number(p.stock) <= Number(p.minimumStock))) {
+        return false;
+      }
+
+      if (q) {
+        const name = (p.name ?? '').toLowerCase();
+        const description = (p.description ?? '').toLowerCase();
+        if (!name.includes(q) && !description.includes(q)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
   }
 
   // Versión corregida para aceptar FormData (con imagen)

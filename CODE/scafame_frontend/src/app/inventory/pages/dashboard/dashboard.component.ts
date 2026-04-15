@@ -20,6 +20,7 @@ import {
 
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { InventoryReportService, ProductDto } from '../../../services/inventory-report.service';
+import ExcelJS from 'exceljs';
 
 Chart.register(PieController, ArcElement, Tooltip, Legend);
 
@@ -83,7 +84,7 @@ Chart.register(PieController, ArcElement, Tooltip, Legend);
           <p class="text-sm text-black/60 mb-4">
             Primero selecciona una categoría para habilitar filtros avanzados.
           </p>
-          <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             
             <!-- Filtro por Categoría -->
             <div>
@@ -122,49 +123,6 @@ Chart.register(PieController, ArcElement, Tooltip, Legend);
               >
                 <option value="">Todas</option>
                 <option *ngFor="let unit of units" [value]="unit">{{ unit }}</option>
-              </select>
-            </div>
-
-            <!-- Filtro por Rango de Stock -->
-            <div [class.opacity-60]="!hasCategorySelected">
-              <label class="block text-sm font-semibold text-black mb-2">Stock Mínimo</label>
-              <input 
-                type="number" 
-                [(ngModel)]="filterMinStock"
-                (ngModelChange)="onFilterChange()"
-                [disabled]="!hasCategorySelected"
-                placeholder="0"
-                class="w-full rounded-lg border border-black/20 bg-white text-black px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-black/40"
-              />
-            </div>
-
-            <!-- Filtro por Stock Máximo -->
-            <div [class.opacity-60]="!hasCategorySelected">
-              <label class="block text-sm font-semibold text-black mb-2">Stock Máximo</label>
-              <input 
-                type="number" 
-                [(ngModel)]="filterMaxStock"
-                (ngModelChange)="onFilterChange()"
-                [disabled]="!hasCategorySelected"
-                placeholder="9999"
-                class="w-full rounded-lg border border-black/20 bg-white text-black px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-black/40"
-              />
-            </div>
-
-            <!-- Filtro por Estado de Stock -->
-            <div [class.opacity-60]="!hasCategorySelected">
-              <label class="block text-sm font-semibold text-black mb-2">Estado</label>
-              <select 
-                [(ngModel)]="filterStockStatus" 
-                (ngModelChange)="onFilterChange()"
-                [disabled]="!hasCategorySelected"
-                class="w-full rounded-lg border border-black/20 bg-white text-black px-3 py-2 text-sm disabled:bg-gray-100 disabled:text-black/40"
-              >
-                <option value="">Todos</option>
-                <option value="critical">Crítico (0 unidades)</option>
-                <option value="low">Bajo (≤ mínimo)</option>
-                <option value="normal">Normal</option>
-                <option value="optimal">Óptimo (> 50% extra)</option>
               </select>
             </div>
 
@@ -220,8 +178,38 @@ Chart.register(PieController, ArcElement, Tooltip, Legend);
             <span class="text-sm text-black/60">Pastel</span>
           </div>
 
-          <div class="h-[420px] flex items-center justify-center">
-            <canvas #chartCanvas class="max-w-[560px] max-h-[380px]"></canvas>
+          <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-4 lg:gap-6 items-start">
+            <div class="h-[500px] w-full flex items-center justify-center relative">
+              <canvas #chartCanvas class="max-w-[560px] max-h-[480px]"></canvas>
+            </div>
+
+            <div class="border border-black/10 rounded-xl p-3 bg-white">
+              <p class="text-xs font-semibold text-black/60 mb-2">Etiquetas</p>
+              <div class="max-h-[420px] overflow-y-auto pr-1 space-y-2">
+                <button
+                  *ngFor="let item of chartLegendItems"
+                  type="button"
+                  (click)="toggleLegendItem(item.index)"
+                  class="w-full text-left p-2 rounded-lg border border-transparent hover:border-black/10 hover:bg-black/[0.02] transition-colors"
+                  [class.opacity-50]="item.hidden"
+                >
+                  <div class="flex items-start gap-2">
+                    <span
+                      class="mt-[2px] inline-block w-6 h-3 rounded-sm flex-shrink-0"
+                      [style.background]="item.color"
+                    ></span>
+                    <div class="min-w-0">
+                      <p class="text-[12px] leading-4 text-black break-words whitespace-normal" [class.line-through]="item.hidden">
+                        {{ item.label }}
+                      </p>
+                      <p class="text-[11px] leading-4 text-black/65" [class.line-through]="item.hidden">
+                        {{ item.value }} unidades
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
           </div>
 
           <p *ngIf="chartInfoMessage" class="text-center text-sm text-black/60 mt-2">
@@ -250,14 +238,12 @@ export class InventoryDashboardComponent implements AfterViewInit, OnDestroy {
   filterName = '';
   filterCategory = '';
   filterUnit = '';
-  filterMinStock = 0;
-  filterMaxStock = 9999;
-  filterStockStatus = '';
 
   totalProducts = 0;
   totalUnits = 0;
   lowStockCount = 0;
   chartInfoMessage = '';
+  chartLegendItems: Array<{ index: number; label: string; value: number; color: string; hidden: boolean }> = [];
 
   constructor(
     private readonly inv: InventoryReportService,
@@ -312,9 +298,6 @@ export class InventoryDashboardComponent implements AfterViewInit, OnDestroy {
     if (!this.filterCategory) {
       this.filterName = '';
       this.filterUnit = '';
-      this.filterMinStock = 0;
-      this.filterMaxStock = 9999;
-      this.filterStockStatus = '';
     }
     this.onFilterChange();
   }
@@ -338,37 +321,15 @@ export class InventoryDashboardComponent implements AfterViewInit, OnDestroy {
         return false;
       }
 
-      if (this.filterName && !p.name?.toLowerCase().includes(this.filterName.trim().toLowerCase())) {
+      if (
+        this.filterName &&
+        !this.normalizeText(p.name ?? '').includes(this.normalizeText(this.filterName.trim()))
+      ) {
         return false;
       }
 
       if (this.filterUnit && p.unit?.name !== this.filterUnit) {
         return false;
-      }
-
-      // Filtrar por rango de stock
-      const stock = p.stock || 0;
-      if (stock < this.filterMinStock || stock > this.filterMaxStock) {
-        return false;
-      }
-
-      // Filtrar por estado
-      if (this.filterStockStatus) {
-        const minStock = p.minimumStock || 0;
-        switch (this.filterStockStatus) {
-          case 'critical':
-            if (stock !== 0) return false;
-            break;
-          case 'low':
-            if (stock > minStock || stock === 0) return false;
-            break;
-          case 'normal':
-            if (stock <= minStock || stock > minStock * 1.5) return false;
-            break;
-          case 'optimal':
-            if (stock <= minStock * 1.5) return false;
-            break;
-        }
       }
 
       return true;
@@ -389,9 +350,6 @@ export class InventoryDashboardComponent implements AfterViewInit, OnDestroy {
     this.filterName = '';
     this.filterCategory = '';
     this.filterUnit = '';
-    this.filterMinStock = 0;
-    this.filterMaxStock = 9999;
-    this.filterStockStatus = '';
     this.onFilterChange();
   }
 
@@ -404,9 +362,6 @@ export class InventoryDashboardComponent implements AfterViewInit, OnDestroy {
     if (this.filterCategory) count++;
     if (this.hasCategorySelected && this.filterName.trim()) count++;
     if (this.hasCategorySelected && this.filterUnit) count++;
-    if (this.hasCategorySelected && this.filterMinStock !== 0) count++;
-    if (this.hasCategorySelected && this.filterMaxStock !== 9999) count++;
-    if (this.hasCategorySelected && this.filterStockStatus) count++;
     return count;
   }
 
@@ -469,37 +424,100 @@ export class InventoryDashboardComponent implements AfterViewInit, OnDestroy {
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { display: true, position: 'right' },
-          tooltip: { enabled: true },
+          legend: {
+            display: false,
+          },
+          tooltip: {
+            enabled: true,
+            callbacks: {
+              label: (context) => {
+                const label = context.label || '';
+                const value = context.parsed || 0;
+                const total = (context.dataset.data as number[]).reduce((a, b) => a + b, 0);
+                const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0';
+                return `${label}: ${value} unidades (${percentage}%)`;
+              }
+            }
+          }
         },
       },
     });
+
+    this.chartLegendItems = chartLabels.map((label, index) => ({
+      index,
+      label: String(label),
+      value: chartValues[index] ?? 0,
+      color: colors[index],
+      hidden: false,
+    }));
   }
 
-  downloadReport(): void {
-    console.log('CLICK descargar');
+  async downloadReport(): Promise<void> {
+    try {
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Inventario');
 
-    this.inv.downloadInventoryXlsx().subscribe({
-      next: (blob) => {
-        const file = new Blob([blob], {
-          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ws.columns = [
+        { header: 'ID', key: 'id', width: 8 },
+        { header: 'Nombre', key: 'name', width: 30 },
+        { header: 'Descripcion', key: 'description', width: 36 },
+        { header: 'Fecha creacion', key: 'creationDate', width: 18 },
+        { header: 'Stock', key: 'stock', width: 12 },
+        { header: 'Stock minimo', key: 'minimumStock', width: 14 },
+        { header: 'Categoria', key: 'category', width: 22 },
+        { header: 'Unidad', key: 'unit', width: 18 },
+      ];
+
+      ws.getRow(1).font = { bold: true };
+
+      for (const p of this.filteredProducts) {
+        const stock = p.stock ?? 0;
+        ws.addRow({
+          id: p.id,
+          name: p.name,
+          description: p.description ?? '',
+          creationDate: this.formatReportDate(p.creationDate),
+          stock,
+          minimumStock: p.minimumStock ?? 0,
+          category: p.productCategory?.name ?? '',
+          unit: p.unit?.name ?? '',
         });
+      }
 
-        const url = window.URL.createObjectURL(file);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `ReporteInventario_${this.localDateYYYYMMDD()}.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-      },
-      error: (err) => console.error('Error descargando reporte:', err),
-    });
+      ws.autoFilter = 'A1:H1';
+      ws.views = [{ state: 'frozen', ySplit: 1 }];
+
+      const buffer = await wb.xlsx.writeBuffer();
+      const file = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+
+      const url = window.URL.createObjectURL(file);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ReporteInventario_${this.localDateYYYYMMDD()}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error generando reporte Excel filtrado:', err);
+    }
   }
 
   goBack(): void {
     this.router.navigate(['/home']);
+  }
+
+  toggleLegendItem(index: number): void {
+    if (!this.chart) return;
+    this.chart.toggleDataVisibility(index);
+    this.chart.update();
+
+    const item = this.chartLegendItems.find((legendItem) => legendItem.index === index);
+    if (item) {
+      item.hidden = !this.chart.getDataVisibility(index);
+    }
   }
 
   private localDateYYYYMMDD(): string {
@@ -508,5 +526,23 @@ export class InventoryDashboardComponent implements AfterViewInit, OnDestroy {
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${day}-${m}-${y}`;
+  }
+
+  private formatReportDate(value?: string | Date): string {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  }
+
+  private normalizeText(value: string): string {
+    return value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
   }
 }

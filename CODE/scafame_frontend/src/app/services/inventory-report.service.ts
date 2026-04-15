@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment.prod'; // ✅ recomendado (no .prod)
 
@@ -11,8 +11,17 @@ export interface ProductDto {
   name: string;
   stock: number;
   minimumStock: number;
-  productCategory?: { name: string };
+  description?: string;
+  creationDate?: string;
+  productCategory?: { id: number; name: string };
   unit?: { name: string };
+}
+
+export interface InventoryReportFilters {
+  q?: string;
+  categoryId?: number;
+  categoryName?: string;
+  unitName?: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -24,8 +33,27 @@ export class InventoryReportService {
   }
 
   // ✅ endpoint correcto
-  downloadInventoryXlsx(): Observable<Blob> {
+  downloadInventoryXlsx(filters?: InventoryReportFilters): Observable<Blob> {
+    let params = new HttpParams();
+
+    if (filters?.q) {
+      params = params.set('q', filters.q);
+    }
+
+    if (filters?.categoryId !== undefined) {
+      params = params.set('categoryId', String(filters.categoryId));
+    }
+
+    if (filters?.categoryName) {
+      params = params.set('categoryName', filters.categoryName);
+    }
+
+    if (filters?.unitName) {
+      params = params.set('unitName', filters.unitName);
+    }
+
     return this.http.get(`${REPORTS_API}/inventory/excel`, {
+      params,
       responseType: 'blob',
     });
   }
@@ -36,7 +64,7 @@ export class InventoryReportService {
       const cat = p.productCategory?.name ?? 'Sin categoría';
       mapCat.set(cat, (mapCat.get(cat) ?? 0) + (p.stock ?? 0));
     }
-    return Array.from(mapCat.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    return Array.from(mapCat.entries()).sort((a, b) => b[1] - a[1]);
   }
 
   countLowStock(products: ProductDto[]) {

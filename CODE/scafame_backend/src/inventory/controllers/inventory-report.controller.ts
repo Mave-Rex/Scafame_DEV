@@ -1,4 +1,4 @@
-import { Controller, Get, Res } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { InventoryReportService } from '../services/inventory-report.service';
 
@@ -8,8 +8,26 @@ export class InventoryReportController {
 
   // ✅ Ruta segura (no choca con :id)
   @Get('inventory/excel')
-  async downloadInventory(@Res() res: Response) {
-    const buffer = await this.reportsService.buildInventoryExcelBuffer();
+  async downloadInventory(
+    @Query('q') q: string | undefined,
+    @Query('categoryId') categoryId: string | undefined,
+    @Query('categoryName') categoryName: string | undefined,
+    @Query('unitName') unitName: string | undefined,
+    @Res() res: Response,
+  ) {
+    const parsedCategoryId =
+      categoryId !== undefined && categoryId !== '' ? Number(categoryId) : undefined;
+
+    if (parsedCategoryId !== undefined && Number.isNaN(parsedCategoryId)) {
+      throw new BadRequestException('categoryId debe ser numerico.');
+    }
+
+    const buffer = await this.reportsService.buildInventoryExcelBuffer({
+      q: q?.trim() || undefined,
+      categoryId: parsedCategoryId,
+      categoryName: categoryName?.trim() || undefined,
+      unitName: unitName?.trim() || undefined,
+    });
     const filename = `ReporteInventario_${this.localDateYYYYMMDD()}.xlsx`;
 
     res.setHeader(

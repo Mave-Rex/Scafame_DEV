@@ -39,6 +39,8 @@ services:
         condition: service_healthy
     ports:
       - "3000:3000"             # <- necesario porque el front llama a :3000
+    volumes:
+      - ./scafame_backend/uploads:/app/uploads
     networks:
       - sigfame-net
 

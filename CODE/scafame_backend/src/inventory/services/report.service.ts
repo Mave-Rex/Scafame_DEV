@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In } from 'typeorm';
@@ -12,6 +13,7 @@ import { Product } from '../../entities/product.entity';
 import { ProductReport } from '../../entities/productReport.entity';
 import { User } from '../../entities/user.entity';
 import { CreateReportDto } from '../../dtos/create-report.dto';
+import { NotificationsService } from '../../notifications/services/notifications.service';
 
 type CreateReportInput = CreateReportDto & {
   userId?: number;         // responsable (INCOME)
@@ -20,12 +22,15 @@ type CreateReportInput = CreateReportDto & {
 
 @Injectable()
 export class ReportService {
+  private readonly logger = new Logger(ReportService.name);
+
   constructor(
     @InjectRepository(Report) private reportRepository: Repository<Report>,
     @InjectRepository(ProductReport) private productReportRepository: Repository<ProductReport>,
     @InjectRepository(Product) private productRepository: Repository<Product>,
     @InjectRepository(User) private userRepository: Repository<User>,
     private readonly dataSource: DataSource,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async createReport(input: CreateReportInput) {
@@ -94,7 +99,7 @@ export class ReportService {
       totals.set(it.productId, (totals.get(it.productId) ?? 0) + it.quantity);
     }
 
-    return await this.dataSource.transaction(async (manager) => {
+    const createdReport = await this.dataSource.transaction(async (manager) => {
       const reportRepo = manager.getRepository(Report);
       const prRepo = manager.getRepository(ProductReport);
       const prodRepo = manager.getRepository(Product);
@@ -152,6 +157,32 @@ export class ReportService {
         relations: ['user', 'ProductReports', 'ProductReports.product'],
       });
     });
+
+    if (!createdReport) {
+      throw new NotFoundException('No se pudo recuperar el reporte creado');
+    }
+
+    if (
+      createdReport.type === ReportType.OUTCOME &&
+      createdReport.requestedBy?.email
+    ) {
+      try {
+        await this.notificationsService.sendOutcomePendingToAdministrators({
+          requesterName: createdReport.requestedBy.username ?? 'usuario',
+          requesterEmail: createdReport.requestedBy.email,
+          reportId: createdReport.id,
+          createdAt: createdReport.createdAt,
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Error desconocido';
+        this.logger.error(
+          `No se pudo notificar a administradores para reporte #${createdReport.id}: ${message}`,
+        );
+      }
+    }
+
+    return createdReport;
   }
 
   async findAllReports(filters?: { type?: ReportType; status?: ReportStatus }) {
@@ -314,6 +345,31 @@ export class ReportService {
       const saved = await runner.manager.getRepository(Report).save(report);
 
       await runner.commitTransaction();
+
+      const reportWithRequester = await this.reportRepository.findOne({
+        where: { id: saved.id },
+        relations: ['requestedBy'],
+      });
+
+      if (reportWithRequester?.requestedBy?.email) {
+        try {
+          await this.notificationsService.sendOutcomeApproved({
+            recipientEmail: reportWithRequester.requestedBy.email,
+            recipientUserId: reportWithRequester.requestedBy.id ?? null,
+            requesterName: reportWithRequester.requestedBy.username ?? 'usuario',
+            reportId: saved.id,
+            approvedByName: approver.username ?? 'administrador',
+            createdAt: saved.createdAt,
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : 'Error desconocido';
+          this.logger.error(
+            `No se pudo notificar aprobacion para reporte #${saved.id}: ${message}`,
+          );
+        }
+      }
+
       return saved;
     } catch (e) {
       await runner.rollbackTransaction();
@@ -347,6 +403,30 @@ export class ReportService {
       const saved = await runner.manager.getRepository(Report).save(report);
 
       await runner.commitTransaction();
+
+      const reportWithRequester = await this.reportRepository.findOne({
+        where: { id: saved.id },
+        relations: ['requestedBy'],
+      });
+
+      if (reportWithRequester?.requestedBy?.email) {
+        try {
+          await this.notificationsService.sendOutcomeRejected({
+            recipientEmail: reportWithRequester.requestedBy.email,
+            recipientUserId: reportWithRequester.requestedBy.id ?? null,
+            requesterName: reportWithRequester.requestedBy.username ?? 'usuario',
+            reportId: saved.id,
+            createdAt: saved.createdAt,
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : 'Error desconocido';
+          this.logger.error(
+            `No se pudo notificar rechazo para reporte #${saved.id}: ${message}`,
+          );
+        }
+      }
+
       return saved;
     } catch (e) {
       await runner.rollbackTransaction();

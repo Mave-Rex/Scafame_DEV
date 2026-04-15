@@ -8,6 +8,7 @@ import { Unit } from '../../entities/unit.entity';
 type ProductFilters = {
   q?: string;
   categoryId?: number;
+  categoryName?: string;
   inStock?: boolean;
   lowStock?: boolean;
 };
@@ -49,6 +50,12 @@ export class ProductService {
       qb.andWhere('productCategory.id = :categoryId', { categoryId: filters.categoryId });
     }
 
+    if (filters?.categoryName) {
+      qb.andWhere('LOWER(productCategory.name) = :categoryName', {
+        categoryName: filters.categoryName.trim().toLowerCase(),
+      });
+    }
+
     if (filters?.inStock) {
       qb.andWhere('product.stock > 0');
     }
@@ -58,12 +65,34 @@ export class ProductService {
     }
 
     if (filters?.q) {
-      qb.andWhere('(LOWER(product.name) LIKE :q OR LOWER(COALESCE(product.description, "")) LIKE :q)', {
-        q: `%${filters.q.toLowerCase()}%`,
-      });
+      const qNorm = `%${this.normalizeSearchText(filters.q)}%`;
+      const normalizedNameExpr = this.sqlNormalizedText('product.name');
+      const normalizedDescriptionExpr = this.sqlNormalizedText("COALESCE(product.description, '')");
+
+      qb.andWhere(
+        `(
+          ${normalizedNameExpr} LIKE :qNorm
+          OR ${normalizedDescriptionExpr} LIKE :qNorm
+        )`,
+        { qNorm },
+      );
     }
 
     return qb;
+  }
+
+  private normalizeSearchText(value: string): string {
+    return value
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+  }
+
+  private sqlNormalizedText(columnExpr: string): string {
+    return `LOWER(
+      REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(${columnExpr},
+      'á','a'),'é','e'),'í','i'),'ó','o'),'ú','u'),'Á','a'),'É','e'),'Í','i'),'Ó','o'),'Ú','u'),'ñ','n'),'Ñ','n')
+    )`;
   }
 
   async createProduct(data: {
@@ -114,7 +143,12 @@ export class ProductService {
     const skip = (page - 1) * limit;
 
     const qb = this.buildFilteredProductsQuery(filters);
-    const [items, total] = await qb.skip(skip).take(limit).getManyAndCount();
+    // Construir query para contar el total CON filtros aplicados
+    const countQb = this.buildFilteredProductsQuery(filters);
+    const total = await countQb.getCount();
+
+    // Construir query para obtener items con paginación
+    const items = await qb.skip(skip).take(limit).getMany();
     const totalPages = Math.max(1, Math.ceil(total / limit));
 
     return {

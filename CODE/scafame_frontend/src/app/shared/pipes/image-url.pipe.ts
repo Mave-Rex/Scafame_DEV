@@ -12,7 +12,18 @@ export class ImageUrlPipe implements PipeTransform {
     const raw = String(value);
     const [rawPath, rawQuery] = raw.split('?');
     const base = environment.API_BASE?.replace(/\/+$/, '') ?? '';
-    const path = rawPath.replace(/^\/+/, '');
+    let path = rawPath.replace(/^\/+/, '');
+
+    // Compatibilidad con rutas heredadas que incluyen /api/uploads/...
+    if (/^api\/uploads\//i.test(path)) {
+      path = path.replace(/^api\//i, '');
+    }
+
+    // Compatibilidad con registros históricos que solo guardaron filename
+    if (!path.includes('/') && /\.(png|jpe?g|webp|gif|bmp|svg)$/i.test(path)) {
+      path = `uploads/${path}`;
+    }
+
     let resolved = `${base}/${path}`;
 
     if (/^uploads\//i.test(path)) {

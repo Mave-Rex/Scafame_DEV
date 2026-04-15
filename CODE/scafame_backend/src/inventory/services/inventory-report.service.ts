@@ -1,14 +1,29 @@
 import { Injectable } from '@nestjs/common';
-import { Product } from '../../entities/product.entity';
 import { ProductService } from '../services/product.service';
 import * as ExcelJS from 'exceljs';
+
+type InventoryExcelFilters = {
+  q?: string;
+  categoryId?: number;
+  categoryName?: string;
+  unitName?: string;
+};
 
 @Injectable()
 export class InventoryReportService {
   constructor(private readonly productService: ProductService) {}
 
-  async buildInventoryExcelBuffer(): Promise<Buffer> {
-    const products = await this.productService.findAllProducts(); // ya lo tienes
+  async buildInventoryExcelBuffer(filters?: InventoryExcelFilters): Promise<Buffer> {
+    const baseProducts = await this.productService.findAllProducts({
+      q: filters?.q,
+      categoryId: filters?.categoryId,
+      categoryName: filters?.categoryName,
+    });
+
+    const normalizedUnit = filters?.unitName?.trim().toLowerCase();
+    const products = normalizedUnit
+      ? baseProducts.filter((p) => (p.unit?.name ?? '').trim().toLowerCase() === normalizedUnit)
+      : baseProducts;
 
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Inventario');

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 import { User } from '../../entities/user.entity';
 import { CreateUserDto } from '../../dtos/create-user.dto';
 import { UpdateUserDto } from '../../dtos/update-user.dto';
@@ -43,7 +43,14 @@ export class UsersService {
 
   async remove(id: number): Promise<void> {
     const user = await this.findOne(id);
-    await this.userRepository.remove(user);
+    try {
+      await this.userRepository.remove(user);
+    } catch (error) {
+      if (error instanceof QueryFailedError) {
+        throw new BadRequestException('No se pudo eliminar el usuario porque tiene registros relacionados');
+      }
+      throw error;
+    }
   }
 
     async changePassword(id: number, currentPassword: string, newPassword: string) {

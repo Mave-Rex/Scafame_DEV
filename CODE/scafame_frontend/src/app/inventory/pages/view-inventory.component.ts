@@ -4,7 +4,7 @@ import { CommonModule } from '@angular/common';
 import { ButtonComponent } from '../../shared/components/button/button.component';
 import { ProductTableComponent } from '../../shared/components/table/product-table.component';
 
-import { ProductService, ProductsPage } from '../../services/product.service';
+import { ProductService, ProductsPage, ProductFilters } from '../../services/product.service';
 import { CategoryService, Category } from '../../services/category.service';
 
 import { normalizeImage } from '../../shared/utils/url.util';
@@ -20,36 +20,28 @@ import { normalizeImage } from '../../shared/utils/url.util';
         <div class="flex flex-col items-center text-center">
           <h1 class="text-4xl font-bold text-black mb-6 mt-2">Inventario</h1>
 
-          <div class="w-full mb-4 border border-gray-200 rounded-lg bg-white px-3 py-2 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div class="text-sm text-black">
-              Mostrando página {{ currentPage }} de {{ totalPages }} ({{ totalItems }} productos)
-            </div>
-            <div class="flex items-center gap-2">
-              <button
-                class="px-3 py-1 rounded border border-black disabled:opacity-40"
-                [disabled]="currentPage <= 1"
-                (click)="goToPage(currentPage - 1)">
-                Anterior
-              </button>
-              <button
-                class="px-3 py-1 rounded border border-black disabled:opacity-40"
-                [disabled]="currentPage >= totalPages"
-                (click)="goToPage(currentPage + 1)">
-                Siguiente
-              </button>
-              <app-button label="Volver" variant="light" (click)="goBack()"></app-button>
-            </div>
+          <div class="w-full mb-3 flex justify-end">
+            <app-button label="Volver" variant="light" (click)="goBack()"></app-button>
           </div>
 
           <app-product-table
             [productos]="productos"
             [categorias]="categorias"
             [showAddButton]="false"
-            [showUnit]="true" 
+            [externalFiltering]="true"
+            [totalProductos]="totalItems"
+            [showUnit]="true"
+            [isLoadingMore]="isLoadingMore"
+            (filtersChange)="onFiltersChange($event)"
+            (scrollNearEnd)="onScrollNearEnd()"
             (verDetalles)="handleVerDetalles($event)"
             (agregar)="handleAgregar($event)"
             (remover)="handleRemover($event)"
           ></app-product-table>
+
+          <p *ngIf="allLoaded && totalItems > 0" class="mt-3 text-xs text-gray-400">
+            Todos los productos cargados ({{ totalItems }})
+          </p>
         </div>
       </div>
     </main>
@@ -57,17 +49,23 @@ import { normalizeImage } from '../../shared/utils/url.util';
 })
 export class ViewInventoryComponent implements OnInit {
   productos: {
+    id: number;
     nombre: string;
     stock: number;
-    categoria: string;           
-    unidad?: string; 
+    categoria: string;
+    unidad?: string;
     imagen?: string | null;
   }[] = [];
   categorias: string[] = [];
-  currentPage = 1;
-  pageSize = 20;
-  totalPages = 1;
+  private categoriesByName = new Map<string, number>();
+  private currentFilters: ProductFilters = {};
+  private currentPage = 1;
+  private readonly pageSize = 20;
+  private totalPages = 1;
   totalItems = 0;
+  isLoadingMore = false;
+  allLoaded = false;
+  private lastRequestId = 0;
 
   constructor(
     private productService: ProductService,
@@ -76,12 +74,19 @@ export class ViewInventoryComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadCategorias();
-    this.loadData(this.currentPage);
+    this.loadPage(1, true);
   }
 
-  loadData(page: number): void {
-    this.productService.getPage(page, this.pageSize).subscribe((resp: ProductsPage) => {
-      this.productos = resp.items.map((p) => ({
+  private loadPage(page: number, replace: boolean): void {
+    if (this.isLoadingMore) return;
+    this.isLoadingMore = true;
+    const reqId = ++this.lastRequestId;
+
+    this.productService.getPage(page, this.pageSize, this.currentFilters).subscribe((resp: ProductsPage) => {
+      if (reqId !== this.lastRequestId) return;
+
+      const mapped = resp.items.map((p) => ({
+        id: p.id,
         nombre: p.name,
         stock: p.stock,
         categoria: p.productCategory?.name ?? '',
@@ -89,36 +94,62 @@ export class ViewInventoryComponent implements OnInit {
         imagen: normalizeImage(p.imageUrl),
       }));
 
+      if (replace) {
+        this.productos = mapped;
+      } else {
+        this.productos = [...this.productos, ...mapped];
+      }
+
       this.currentPage = resp.page;
       this.totalPages = resp.totalPages;
       this.totalItems = resp.total;
+      this.allLoaded = this.currentPage >= this.totalPages;
+      this.isLoadingMore = false;
     });
   }
 
   loadCategorias(): void {
     this.categoryService.getAll().subscribe((categories: Category[]) => {
+      this.categoriesByName = new Map(categories.map((c) => [c.name, c.id]));
       this.categorias = categories.map((c) => c.name);
     });
   }
 
-  goToPage(page: number): void {
-    if (page < 1 || page > this.totalPages) return;
-    this.loadData(page);
+  onFiltersChange(filters: { searchTerm: string; categoria: string }): void {
+    const nextFilters: ProductFilters = {};
+
+    if (filters.searchTerm) {
+      nextFilters.q = filters.searchTerm;
+    }
+
+    if (filters.categoria) {
+      const categoryId = this.categoriesByName.get(filters.categoria);
+      if (categoryId !== undefined) {
+        nextFilters.categoryId = categoryId;
+      }
+    }
+
+    const changed = JSON.stringify(this.currentFilters) !== JSON.stringify(nextFilters);
+    if (!changed) return;
+
+    this.currentFilters = nextFilters;
+    this.allLoaded = false;
+    this.lastRequestId++;
+    this.isLoadingMore = false;
+    this.loadPage(1, true);
   }
 
-  handleVerDetalles(producto: any): void {
-    console.log('Ver detalles de:', producto);
+  onScrollNearEnd(): void {
+    if (this.isLoadingMore || this.allLoaded) return;
+    this.loadPage(this.currentPage + 1, false);
   }
 
-  handleAgregar(producto: any): void {
-    console.log('Agregar producto:', producto);
-  }
-
-  handleRemover(producto: any): void {
-    console.log('Quitar producto:', producto);
-  }
+  handleVerDetalles(producto: any): void {}
+  handleAgregar(producto: any): void {}
+  handleRemover(producto: any): void {}
 
   goBack(): void {
     history.back();
   }
 }
+

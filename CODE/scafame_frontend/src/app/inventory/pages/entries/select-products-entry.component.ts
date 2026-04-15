@@ -6,7 +6,7 @@ import { ToastrService } from 'ngx-toastr';
 import { ButtonComponent } from '../../../shared/components/button/button.component';
 import { ProductTableComponent } from '../../../shared/components/table/product-table.component';
 
-import { ProductService, Product } from '../../../services/product.service';
+import { ProductService, ProductsPage, ProductFilters } from '../../../services/product.service';
 import { CategoryService, Category } from '../../../services/category.service';
 import { EntryService } from '../../../services/entry.service';
 
@@ -51,11 +51,34 @@ import { normalizeImage } from '../../../shared/utils/url.util';
         ></app-button>
       </div>
 
+      <div class="w-full mb-4 border border-gray-200 rounded-lg bg-white px-3 py-2 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div class="text-sm text-black">
+          Mostrando página {{ currentPage }} de {{ totalPages }} ({{ totalItems }} productos)
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            class="px-3 py-1 rounded border border-black disabled:opacity-40"
+            [disabled]="currentPage <= 1"
+            (click)="goToPage(currentPage - 1)">
+            Anterior
+          </button>
+          <button
+            class="px-3 py-1 rounded border border-black disabled:opacity-40"
+            [disabled]="currentPage >= totalPages"
+            (click)="goToPage(currentPage + 1)">
+            Siguiente
+          </button>
+        </div>
+      </div>
+
       <app-product-table
         [productos]="productos"
         [categorias]="categorias"
         [showAddButton]="true"
         [modoIngreso]="true"
+        [externalFiltering]="true"
+        [totalProductos]="totalItems"
+        (filtersChange)="onFiltersChange($event)"
         (verDetalles)="onDetails($event)"
         (seleccionar)="onToggleSelect($event)"
         (agregar)="onAdd($event)"
@@ -104,6 +127,12 @@ export class SelectProductsEntryComponent implements OnInit {
 
   // Lista de nombres de categorías (sin área)
   categorias: string[] = [];
+  private categoriesByName = new Map<string, number>();
+  private currentFilters: ProductFilters = {};
+  currentPage = 1;
+  pageSize = 20;
+  totalPages = 1;
+  totalItems = 0;
 
   selectedProducts: {
     id: number;
@@ -128,10 +157,19 @@ export class SelectProductsEntryComponent implements OnInit {
 
   ngOnInit(): void {
     this.selectedProducts = this.entryService.getSelectedProducts();
+    this.totalIngresos = this.selectedProducts.reduce((sum, p) => sum + p.cantidad, 0);
+    this.loadData(this.currentPage);
 
-    // Productos sin "área"
-    this.productService.getAll().subscribe((products: Product[]) => {
-      this.productos = products.map(p => {
+    // Categorías sin "área"
+    this.categoryService.getAll().subscribe((categories: Category[]) => {
+      this.categoriesByName = new Map(categories.map((c) => [c.name, c.id]));
+      this.categorias = categories.map(c => c.name);
+    });
+  }
+
+  loadData(page: number): void {
+    this.productService.getPage(page, this.pageSize, this.currentFilters).subscribe((resp: ProductsPage) => {
+      this.productos = resp.items.map(p => {
         const imagen = normalizeImage(p.imageUrl);
         const isSelected = this.selectedProducts.some(sp => sp.id === p.id);
         const categoria = p.productCategory?.name ?? '';
@@ -147,13 +185,39 @@ export class SelectProductsEntryComponent implements OnInit {
         };
       });
 
-      this.totalIngresos = this.selectedProducts.reduce((sum, p) => sum + p.cantidad, 0);
+      this.currentPage = resp.page;
+      this.totalPages = resp.totalPages;
+      this.totalItems = resp.total;
     });
+  }
 
-    // Categorías sin "área"
-    this.categoryService.getAll().subscribe((categories: Category[]) => {
-      this.categorias = categories.map(c => c.name);
-    });
+  onFiltersChange(filters: { searchTerm: string; categoria: string }): void {
+    const nextFilters: ProductFilters = {};
+
+    if (filters.searchTerm) {
+      nextFilters.q = filters.searchTerm;
+    }
+
+    if (filters.categoria) {
+      const categoryId = this.categoriesByName.get(filters.categoria);
+      if (categoryId !== undefined) {
+        nextFilters.categoryId = categoryId;
+      }
+    }
+
+    const changed = JSON.stringify(this.currentFilters) !== JSON.stringify(nextFilters);
+    if (!changed) {
+      return;
+    }
+
+    this.currentFilters = nextFilters;
+    this.currentPage = 1;
+    this.loadData(1);
+  }
+
+  goToPage(page: number): void {
+    if (page < 1 || page > this.totalPages) return;
+    this.loadData(page);
   }
 
   onDetails(producto: any) {

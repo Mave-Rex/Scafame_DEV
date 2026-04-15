@@ -16,6 +16,9 @@ __pycache__/
 # Ignorar logs
 *.log
 
+# Ignorar archivos de compilación incremental de TypeScript
+*.tsbuildinfo
+
 # Ignorar todos los archivos generados
 *.spec
 *.pyc

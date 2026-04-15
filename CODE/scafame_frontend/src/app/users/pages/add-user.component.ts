@@ -47,7 +47,7 @@ import { UserService, User } from '../services/user.service';
   `
 })
 export class AddUserComponent {
-  user: User = {
+  user: Omit<User, 'role'> & { role: '' | 'admin' | 'manager' | 'user' } = {
     id: 0,
     firstname: '',
     lastname: '',
@@ -56,7 +56,7 @@ export class AddUserComponent {
     password: '',
     area: '',
     jobTitle: '',
-    role: 'user',
+    role: '',
     // accessLevel ya no se edita manualmente
     accessLevel: 'low'
   };
@@ -74,9 +74,22 @@ export class AddUserComponent {
   }
 
   submit() {
+    if (!this.user.role) {
+      this.toastr.warning('Selecciona un rol para el usuario');
+      return;
+    }
+
     const payload: User = {
-      ...this.user,
-      accessLevel: this.roleToAccessLevel(this.user.role as 'admin'|'manager'|'user'),
+      id: this.user.id,
+      firstname: this.user.firstname,
+      lastname: this.user.lastname,
+      username: this.user.username,
+      email: this.user.email,
+      password: this.user.password,
+      area: this.user.area,
+      jobTitle: this.user.jobTitle,
+      role: this.user.role,
+      accessLevel: this.roleToAccessLevel(this.user.role),
     };
 
     this.userService.create(payload).subscribe({

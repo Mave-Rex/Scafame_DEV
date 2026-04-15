@@ -5,7 +5,7 @@ import { ButtonComponent } from '../../../../shared/components/button/button.com
 import { ProductTableComponent } from '../../../../shared/components/table/product-table.component';
 import { ToastrService } from 'ngx-toastr';
 
-import { ProductService, Product } from '../../../../services/product.service';
+import { ProductService, ProductsPage, ProductFilters } from '../../../../services/product.service';
 import { CategoryService, Category } from '../../../../services/category.service';
 import { WithdrawalService } from '../../../../services/withdrawal.service';
 import { AuthService } from '../../../../auth/auth.service';
@@ -50,11 +50,34 @@ import { normalizeImage } from '../../../../shared/utils/url.util';
         ></app-button>
       </div>
 
+      <div class="w-full mb-4 border border-gray-200 rounded-lg bg-white px-3 py-2 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div class="text-sm text-black">
+          Mostrando página {{ currentPage }} de {{ totalPages }} ({{ totalItems }} productos)
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            class="px-3 py-1 rounded border border-black disabled:opacity-40"
+            [disabled]="currentPage <= 1"
+            (click)="goToPage(currentPage - 1)">
+            Anterior
+          </button>
+          <button
+            class="px-3 py-1 rounded border border-black disabled:opacity-40"
+            [disabled]="currentPage >= totalPages"
+            (click)="goToPage(currentPage + 1)">
+            Siguiente
+          </button>
+        </div>
+      </div>
+
       <app-product-table
         [productos]="productosMarcados"
         [categorias]="categorias"
         [showAddButton]="true"
         [modoIngreso]="true"
+        [externalFiltering]="true"
+        [totalProductos]="totalItems"
+        (filtersChange)="onFiltersChange($event)"
         (verDetalles)="onDetails($event)"
         (seleccionar)="onToggleSelect($event)"
         (agregar)="onAdd($event)"
@@ -95,12 +118,19 @@ export class SelectProductsComponent implements OnInit {
     id: number;
     nombre: string;
     stock: number;
-    categoria: string;           // <- string obligatorio
+    categoria: string;
+    unidad?: string;
     imagen?: string;
   }[] = [];
 
   // categorías como lista de nombres (sin área)
   categorias: string[] = [];
+  private categoriesByName = new Map<string, number>();
+  private currentFilters: ProductFilters = { inStock: true };
+  currentPage = 1;
+  pageSize = 20;
+  totalPages = 1;
+  totalItems = 0;
 
   selectedIds: number[] = [];
   showExitModal = false;
@@ -132,9 +162,18 @@ export class SelectProductsComponent implements OnInit {
     const seleccionados = this.withdrawalService.getSelected();
     this.selectedIds = seleccionados.map(p => p.id);
 
-    // Productos (sin área)
-    this.productService.getAll({ inStock: true }).subscribe((products: Product[]) => {
-      this.productos = products.map(p => ({
+    this.loadData(this.currentPage);
+
+    // Categorías (lista de nombres)
+    this.categoryService.getAll().subscribe((categories: Category[]) => {
+      this.categoriesByName = new Map(categories.map((c) => [c.name, c.id]));
+      this.categorias = categories.map(c => c.name);
+    });
+  }
+
+  loadData(page: number): void {
+    this.productService.getPage(page, this.pageSize, this.currentFilters).subscribe((resp: ProductsPage) => {
+      this.productos = resp.items.map(p => ({
         id: p.id,
         nombre: p.name,
         stock: p.stock,
@@ -142,12 +181,40 @@ export class SelectProductsComponent implements OnInit {
         unidad: (p.unit?.abbreviation || p.unit?.name) ?? '',
         imagen: normalizeImage(p.imageUrl) || undefined
       }));
-    });
 
-    // Categorías (lista de nombres)
-    this.categoryService.getAll().subscribe((categories: Category[]) => {
-      this.categorias = categories.map(c => c.name);
+      this.currentPage = resp.page;
+      this.totalPages = resp.totalPages;
+      this.totalItems = resp.total;
     });
+  }
+
+  onFiltersChange(filters: { searchTerm: string; categoria: string }): void {
+    const nextFilters: ProductFilters = { inStock: true };
+
+    if (filters.searchTerm) {
+      nextFilters.q = filters.searchTerm;
+    }
+
+    if (filters.categoria) {
+      const categoryId = this.categoriesByName.get(filters.categoria);
+      if (categoryId !== undefined) {
+        nextFilters.categoryId = categoryId;
+      }
+    }
+
+    const changed = JSON.stringify(this.currentFilters) !== JSON.stringify(nextFilters);
+    if (!changed) {
+      return;
+    }
+
+    this.currentFilters = nextFilters;
+    this.currentPage = 1;
+    this.loadData(1);
+  }
+
+  goToPage(page: number): void {
+    if (page < 1 || page > this.totalPages) return;
+    this.loadData(page);
   }
 
   private showSelectToast(total: number) {

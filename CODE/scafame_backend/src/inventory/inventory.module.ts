@@ -21,10 +21,12 @@ import { ReportService } from './services/report.service';
 
 import { InventoryReportController } from './controllers/inventory-report.controller';
 import { InventoryReportService } from './services/inventory-report.service';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Product, ProductCategory, Unit, Report, ProductReport, User]), // <- Aquí se importan las entidades
+    NotificationsModule,
   ],
   providers: [
     ProductService,

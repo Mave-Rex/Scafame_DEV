@@ -22,12 +22,12 @@ export class Report {
 
   // (YA EXISTENTE) Usuario que realiza la entrega
   @Index('idx_report_user_fk')
-  @ManyToOne(() => User, { eager: true, nullable: true })
+  @ManyToOne(() => User, { eager: true, nullable: true, onDelete: 'SET NULL' })
   user: User;
 
   // (NUEVO) Usuario que solicita el pedido
   @Index('idx_report_requested_by_fk')
-  @ManyToOne(() => User, { eager: true, nullable: true })
+  @ManyToOne(() => User, { eager: true, nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'requested_by_id' })   
   requestedBy: User;
 

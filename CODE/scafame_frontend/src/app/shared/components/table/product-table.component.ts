@@ -6,6 +6,7 @@ import {
   OnChanges,
   SimpleChanges
 } from '@angular/core';
+
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ImageUrlPipe } from '../../pipes/image-url.pipe';
@@ -43,12 +44,12 @@ import { ImageUrlPipe } from '../../pipes/image-url.pipe';
           </div>
 
           <div class="text-xs sm:text-sm text-gray-600 whitespace-nowrap">
-            {{ filteredProductos.length }} producto(s)
+            {{ totalProductosVisibles }} producto(s)
           </div>
         </div>
       </div>
 
-      <div class="overflow-auto max-h-[68vh]">
+      <div class="overflow-auto max-h-[68vh]" (scroll)="onTableScroll($event)">
         <table class="w-full table-fixed text-sm text-left text-gray-800">
           <thead class="sticky top-0 z-10 bg-gray-100 border-b border-gray-200">
             <tr>
@@ -141,6 +142,14 @@ import { ImageUrlPipe } from '../../pipes/image-url.pipe';
                 No se encontraron productos para los filtros seleccionados.
               </td>
             </tr>
+            <tr *ngIf="isLoadingMore">
+              <td
+                class="px-3 py-4 text-center text-gray-400 text-xs"
+                [attr.colspan]="showAddButton && modoIngreso ? 8 : 7"
+              >
+                Cargando más productos...
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -180,6 +189,7 @@ import { ImageUrlPipe } from '../../pipes/image-url.pipe';
 })
 export class ProductTableComponent implements OnChanges {
   @Input() productos: {
+    id?: number;
     nombre: string;
     stock: number;
     categoria: string;
@@ -193,11 +203,16 @@ export class ProductTableComponent implements OnChanges {
 
   @Input() showAddButton = true;
   @Input() modoIngreso = false;
+  @Input() externalFiltering = false;
+  @Input() totalProductos?: number;
+  @Input() isLoadingMore = false;
 
+  @Output() scrollNearEnd = new EventEmitter<void>();
   @Output() verDetalles = new EventEmitter<any>();
   @Output() agregar = new EventEmitter<any>();
   @Output() remover = new EventEmitter<any>();
   @Output() seleccionar = new EventEmitter<any>();
+  @Output() filtersChange = new EventEmitter<{ searchTerm: string; categoria: string }>();
 
   // Filtros
   searchTerm = '';
@@ -205,6 +220,7 @@ export class ProductTableComponent implements OnChanges {
 
   // Data filtrada
   filteredProductos: {
+    id?: number;
     nombre: string;
     stock: number;
     categoria: string;
@@ -232,6 +248,10 @@ export class ProductTableComponent implements OnChanges {
     }
   }
 
+  get totalProductosVisibles(): number {
+    return this.externalFiltering ? (this.totalProductos ?? this.productos.length) : this.filteredProductos.length;
+  }
+
   /** Construye una lista única de nombres de categoría */
   private buildCategoriasUnicas() {
     const set = new Set<string>();
@@ -252,6 +272,15 @@ export class ProductTableComponent implements OnChanges {
   }
 
   filtrarProductos(): void {
+    if (this.externalFiltering) {
+      this.filteredProductos = this.productos;
+      this.filtersChange.emit({
+        searchTerm: this.searchTerm.trim(),
+        categoria: this.selectedCategoria,
+      });
+      return;
+    }
+
     const q = this.searchTerm.trim().toLowerCase();
 
     this.filteredProductos = this.productos.filter(p => {
@@ -298,6 +327,13 @@ export class ProductTableComponent implements OnChanges {
    * Evita que Angular rerendeice las filas cuando la lista se actualiza
    */
   trackByProducto(_index: number, producto: any): string {
-    return producto.nombre;
+    return String(producto.id ?? producto.nombre);
+  }
+
+  onTableScroll(event: Event): void {
+    const el = event.target as HTMLElement;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 200) {
+      this.scrollNearEnd.emit();
+    }
   }
 }
