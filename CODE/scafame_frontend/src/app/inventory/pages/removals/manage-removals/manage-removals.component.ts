@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ButtonComponent } from '../../../../shared/components/button/button.component';
 import { RetiroTableComponent, RetiroItem } from '../../../../shared/components/table/retiro-table.component';
@@ -7,25 +7,98 @@ import { ToastrService } from 'ngx-toastr';
 import { ReportService } from '../../../../services/report.service';
 import { firstValueFrom } from 'rxjs';
 import { UserService, User } from '../../../../users/services/user.service';
+import { InventoryReportService } from '../../../../services/inventory-report.service';
+import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-manage-removals',
   standalone: true,
-  imports: [CommonModule, ButtonComponent, RetiroTableComponent],
+  imports: [CommonModule, FormsModule, ButtonComponent, RetiroTableComponent],
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
     <main class="min-h-[calc(100vh-120px)] p-8 font-display">
-      <div class="max-w-[980px] w-full mx-auto relative">
+      <div class="max-w-[1200px] w-full mx-auto relative">
         <h1 class="text-3xl sm:text-4xl font-extrabold text-black text-center mb-8">
           Administrar Retiros
         </h1>
 
-        <app-retiro-table
-          [retiros]="withdrawals"
-          [disabled]="isSaving"
-          (verDetalles)="onDetails($event)"
-          (aprobar)="onApprove($event)"
-          (rechazar)="onReject($event)"
-        ></app-retiro-table>
+        <section class="mt-5 rounded-xl border border-zinc-300 bg-white p-4 shadow-sm">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 class="text-lg font-bold text-black">Reporte Excel: Productos mas consumidos por area</h2>
+              <p class="text-sm text-zinc-600 mt-1">Filtra por area y por rango de fechas para descargar el consolidado de consumos aprobados.</p>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                (click)="toggleFilters()"
+                class="inline-flex items-center gap-2 border border-black/20 rounded-xl px-3 py-2 text-sm bg-white hover:bg-black hover:text-white transition-colors"
+                [attr.aria-expanded]="showFilters"
+              >
+                <iconify-icon icon="mdi:filter-variant" width="18" height="18"></iconify-icon>
+                <span>Filtrar</span>
+                <span *ngIf="activeFiltersCount > 0"
+                      class="ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1 text-[11px] font-semibold rounded-full bg-black text-white">
+                  {{ activeFiltersCount }}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                class="bg-black text-white px-4 py-2 rounded-md font-semibold hover:bg-zinc-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                [disabled]="isExporting"
+                (click)="downloadTopConsumedByAreaExcel()"
+              >
+                {{ isExporting ? 'Generando...' : 'Descargar reporte' }}
+              </button>
+            </div>
+          </div>
+
+          <div *ngIf="showFilters" class="mt-3 grid grid-cols-1 lg:grid-cols-3 gap-3 lg:items-end">
+            <div>
+              <label class="block text-sm font-semibold text-zinc-800 mb-1">Area</label>
+              <select
+                [(ngModel)]="selectedArea"
+                [disabled]="isExporting"
+                class="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
+              >
+                <option value="">Todas las areas</option>
+                <option *ngFor="let area of areaOptions" [value]="area">{{ area }}</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-sm font-semibold text-zinc-800 mb-1">Desde</label>
+              <input
+                type="date"
+                [(ngModel)]="startDate"
+                [disabled]="isExporting"
+                class="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
+              />
+            </div>
+
+            <div>
+              <label class="block text-sm font-semibold text-zinc-800 mb-1">Hasta</label>
+              <input
+                type="date"
+                [(ngModel)]="endDate"
+                [disabled]="isExporting"
+                class="w-full border border-zinc-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black/20"
+              />
+            </div>
+          </div>
+        </section>
+
+        <div class="mt-12">
+          <app-retiro-table
+            [retiros]="withdrawals"
+            [disabled]="isSaving"
+            (verDetalles)="onDetails($event)"
+            (aprobar)="onApprove($event)"
+            (rechazar)="onReject($event)"
+          ></app-retiro-table>
+        </div>
 
         <!-- Acciones -->
         <div class="flex flex-col sm:flex-row gap-3 justify-center sm:justify-end items-center mt-6">
@@ -100,18 +173,45 @@ export class ManageRemovalsComponent implements OnInit {
   selectedRetiro: any = null;
   loadingUser = false;
   selectedUser: Partial<User> | null = null;
+  areaOptions: string[] = [];
 
   isSaving = false;
+  isExporting = false;
+  showFilters = false;
+  selectedArea = '';
+  startDate = '';
+  endDate = '';
 
   constructor(
     private router: Router,
     private toastr: ToastrService,
     private reportService: ReportService,
-    private userService: UserService
+    private userService: UserService,
+    private inventoryReportService: InventoryReportService
   ) {}
 
   ngOnInit(): void {
     this.loadReports();
+    this.loadAreas();
+  }
+
+  loadAreas() {
+    this.userService.getAll().subscribe({
+      next: (users) => {
+        const areas = Array.from(
+          new Set(
+            (users ?? [])
+              .map((user) => (user?.area ?? '').trim())
+              .filter((area) => area.length > 0)
+          )
+        ).sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+
+        this.areaOptions = areas;
+      },
+      error: () => {
+        this.areaOptions = [];
+      }
+    });
   }
 
   loadReports() {
@@ -125,6 +225,15 @@ export class ManageRemovalsComponent implements OnInit {
           .map((r: any) => ({
             id: String(r.id),
             fecha: this.formatDate(r.createdAt),
+            area:
+              r?.requestedBy?.area ||
+              r?.user?.area ||
+              'Sin area',
+            solicitante:
+              `${r?.requestedBy?.firstname || ''} ${r?.requestedBy?.lastname || ''}`.trim() ||
+              r?.requestedBy?.username ||
+              r?.user?.username ||
+              'No identificado',
             raw: r,
             aprobado: false,
             rechazado: false
@@ -175,35 +284,8 @@ export class ManageRemovalsComponent implements OnInit {
     this.isSaving = true;
 
     try {
-      // 1) Revalidar que sigan PENDING
-      const revalPromises = candidatos.map(async (w) => {
-        try {
-          const fresh = await firstValueFrom(this.reportService.getById(+w.id));
-          return { w, fresh };
-        } catch {
-          return { w, fresh: null };
-        }
-      });
-
-      const reval = await Promise.all(revalPromises);
-
-      const todaviaPending = reval
-        .filter(r => (r.fresh?.status ?? '').toLowerCase() === 'pending')
-        .map(r => r.w);
-
-      const descartados = reval
-        .filter(r => !r.fresh || (r.fresh.status ?? '').toLowerCase() !== 'pending')
-        .map(r => r.w);
-
-      descartados.forEach(d => this.toastr.warning(`Reporte ${d.id} ya fue procesado; se omitió.`));
-
-      if (todaviaPending.length === 0) {
-        this.isSaving = false;
-        return;
-      }
-
-      // 2) PATCH según decisión
-      const opPromises = todaviaPending.map(async (w) => {
+      // PATCH según decisión (el backend valida conflictos/stock y responde 409/400)
+      const opPromises = candidatos.map(async (w) => {
         try {
           if (w.aprobado) {
             await firstValueFrom(this.reportService.approveReport(+w.id));
@@ -317,5 +399,97 @@ export class ManageRemovalsComponent implements OnInit {
   }
   get selectedRetiroUsernameFallback(): string {
     return this.selectedRetiro?.user?.username || '—';
+  }
+
+  get activeFiltersCount(): number {
+    let count = 0;
+    if (this.selectedArea.trim()) count++;
+    if (this.startDate) count++;
+    if (this.endDate) count++;
+    return count;
+  }
+
+  toggleFilters() {
+    this.showFilters = !this.showFilters;
+  }
+
+  downloadTopConsumedByAreaExcel() {
+    this.isExporting = true;
+
+    this.inventoryReportService
+      .downloadTopConsumedByAreaXlsxResponse({
+        area: this.selectedArea.trim() || undefined,
+        startDate: this.startDate || undefined,
+        endDate: this.endDate || undefined,
+      })
+      .subscribe({
+        next: (response) => {
+          const blob = response.body;
+          if (!blob) {
+            this.toastr.error('No se pudo generar el reporte por area');
+            this.isExporting = false;
+            return;
+          }
+
+          const date = new Date();
+          const dd = String(date.getDate()).padStart(2, '0');
+          const mm = String(date.getMonth() + 1).padStart(2, '0');
+          const yyyy = date.getFullYear();
+          const backendFilename = this.extractFilename(response.headers.get('content-disposition'));
+          const fallbackFilename = this.buildReportFilename();
+
+          const href = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = href;
+          a.download = backendFilename || fallbackFilename;
+          a.click();
+          URL.revokeObjectURL(href);
+
+          this.toastr.success('Reporte Excel descargado correctamente');
+          this.isExporting = false;
+        },
+        error: () => {
+          this.toastr.error('No se pudo generar el reporte por area');
+          this.isExporting = false;
+        },
+      });
+  }
+
+  private extractFilename(contentDisposition: string | null): string | null {
+    if (!contentDisposition) return null;
+
+    const match = /filename\*?=(?:UTF-8''|\")?([^";]+)\"?/i.exec(contentDisposition);
+    if (!match?.[1]) return null;
+
+    try {
+      return decodeURIComponent(match[1].replace(/\"/g, '').trim());
+    } catch {
+      return match[1].replace(/\"/g, '').trim();
+    }
+  }
+
+  private buildReportFilename(): string {
+    const areaPart = this.selectedArea.trim() || 'Todos';
+
+    const safeArea = areaPart.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'Todos';
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const start = this.startDate ? this.startDate.replace(/[^0-9-]/g, '') : '';
+    const end = this.endDate ? this.endDate.replace(/[^0-9-]/g, '') : '';
+
+    let range = '';
+    if (start && end) {
+      range = `${start}_al_${end}`;
+    } else if (start) {
+      range = `desde_${start}`;
+    } else if (end) {
+      range = `hasta_${end}`;
+    }
+
+    return range
+      ? `ReporteArea_${safeArea}_${range}_${yyyy}${mm}${dd}.xlsx`
+      : `ReporteArea_${safeArea}_${yyyy}${mm}${dd}.xlsx`;
   }
 }

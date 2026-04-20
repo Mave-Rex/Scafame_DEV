@@ -20,6 +20,8 @@ import { CommonModule } from '@angular/common';
       <div class="flex flex-col sm:flex-row sm:items-center sm:gap-8 font-bold">
         <span>ID: {{ id }}</span>
         <span>Retiro</span>
+        <span>Area: {{ area }}</span>
+        <span>Solicitante: {{ solicitante }}</span>
         <span>Fecha: {{ fecha }}</span>
       </div>
 
@@ -96,6 +98,8 @@ import { CommonModule } from '@angular/common';
 export class RetiroCardComponent {
   @Input() id = '';
   @Input() fecha = '';
+  @Input() area = 'Sin area';
+  @Input() solicitante = 'No identificado';
   @Input() aprobado = false;
   @Input() rechazado = false;
   @Input() disabled = false;            // ✅ nuevo: para reflejar el estado del table

@@ -5,8 +5,8 @@ import { ButtonComponent } from '../../../../shared/components/button/button.com
 import { SelectedProductTableComponent } from '../../../../shared/components/table/selected-product-table.component';
 import { ToastrService } from 'ngx-toastr';
 import { WithdrawalService, SelectedProduct } from '../../../../services/withdrawal.service';
-import { AuthService } from '../../../../auth/auth.service';
 import { ReportService } from '../../../../services/report.service';
+import { finalize } from 'rxjs/operators';
 
 @Component({
   selector: 'app-review-request',
@@ -27,8 +27,18 @@ import { ReportService } from '../../../../services/report.service';
           class="flex flex-col gap-4 items-center mt-6
                 lg:absolute lg:-right-8 lg:bottom-1 lg:items-end lg:mt-0"
         >
-          <app-button label="Volver a Inventario" variant="light" (click)="goBack()" />
-          <app-button label="Generar Solicitud" variant="light" (click)="openModal()" />
+          <app-button
+            label="Volver a Inventario"
+            variant="light"
+            [disabled]="isSubmitting"
+            (click)="goBack()"
+          />
+          <app-button
+            [label]="isSubmitting ? 'Procesando...' : 'Generar Solicitud'"
+            variant="light"
+            [disabled]="isSubmitting"
+            (click)="openModal()"
+          />
         </div>
       </div>
 
@@ -46,8 +56,20 @@ import { ReportService } from '../../../../services/report.service';
           </div>
 
           <div class="flex justify-end mt-6 gap-4">
-            <button class="text-sm text-gray-600 hover:underline" (click)="cancel()">Cancelar</button>
-            <button class="bg-black text-white px-4 py-2 rounded text-sm" (click)="submitRequest()">Confirmar</button>
+            <button
+              class="text-sm text-gray-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+              [disabled]="isSubmitting"
+              (click)="cancel()"
+            >
+              Cancelar
+            </button>
+            <button
+              class="bg-black text-white px-4 py-2 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              [disabled]="isSubmitting"
+              (click)="submitRequest()"
+            >
+              {{ isSubmitting ? 'Enviando...' : 'Confirmar' }}
+            </button>
           </div>
         </div>
       </div>
@@ -57,12 +79,12 @@ import { ReportService } from '../../../../services/report.service';
 export class ReviewRequestComponent implements OnInit {
   selected: SelectedProduct[] = [];
   showModal = false;
+  isSubmitting = false;
 
   constructor(
     private router: Router,
     private toastr: ToastrService,
     private withdrawalService: WithdrawalService,
-    private authService: AuthService,
     private reportService: ReportService
   ) {}
 
@@ -71,6 +93,15 @@ export class ReviewRequestComponent implements OnInit {
   }
 
   openModal() {
+    if (this.isSubmitting) {
+      return;
+    }
+
+    if (!this.selected.length) {
+      this.toastr.warning('No hay productos seleccionados para el retiro');
+      return;
+    }
+
     this.showModal = true;
   }
 
@@ -79,29 +110,38 @@ export class ReviewRequestComponent implements OnInit {
   }
 
   submitRequest() {
-    this.authService.getPerfilUsuario().subscribe({
-      next: (user) => {
-        const payload = {
-          userId: user.id,
-          products: this.selected.map(p => ({
-            productId: p.id,
-            quantity: p.cantidad
-          }))
-        };
+    if (this.isSubmitting) {
+      return;
+    }
 
-        this.reportService.createOutcomeReport(payload).subscribe({
-          next: () => {
-            this.toastr.success('Solicitud generada correctamente');
-            this.withdrawalService.clear();
-            this.router.navigate(['/home']);
-          },
-          error: () => {
-            this.toastr.error('Error al generar la solicitud');
-          }
-        });
+    if (!this.selected.length) {
+      this.toastr.warning('No hay productos seleccionados para el retiro');
+      this.showModal = false;
+      return;
+    }
+
+    this.isSubmitting = true;
+
+    const payload = {
+      products: this.selected.map(p => ({
+        productId: p.id,
+        quantity: p.cantidad
+      }))
+    };
+
+    this.reportService.createOutcomeReport(payload).pipe(
+      finalize(() => {
+        this.isSubmitting = false;
+      })
+    ).subscribe({
+      next: () => {
+        this.toastr.success('Solicitud generada correctamente');
+        this.withdrawalService.clear();
+        this.router.navigate(['/home']);
       },
-      error: () => {
-        this.toastr.error('No se pudo obtener el usuario');
+      error: (err) => {
+        const message = err?.error?.message || 'Error al generar la solicitud';
+        this.toastr.error(message);
       }
     });
   }

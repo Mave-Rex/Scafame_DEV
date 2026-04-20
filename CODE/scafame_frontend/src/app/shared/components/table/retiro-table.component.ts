@@ -1,10 +1,11 @@
 import { Component, Input, Output, EventEmitter, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RetiroCardComponent } from '../card/retiro-card.component';
 
 export interface RetiroItem {
   id: string;
   fecha: string;
+  area?: string;
+  solicitante?: string;
   raw: any;
   aprobado?: boolean;
   rechazado?: boolean;
@@ -13,7 +14,7 @@ export interface RetiroItem {
 @Component({
   selector: 'app-retiro-table',
   standalone: true,
-  imports: [CommonModule, RetiroCardComponent],
+  imports: [CommonModule],
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
     <section
@@ -28,14 +29,14 @@ export interface RetiroItem {
               <iconify-icon icon="mdi:package-variant-minus" class="w-5 h-5"></iconify-icon>
             </div>
             <div>
-              <h2 class="text-xl font-semibold leading-tight">Retiros pendientes</h2>
-              <p class="text-xs text-white/60 -mt-0.5">
+              <h2 class="text-2xl font-semibold leading-tight">Retiros pendientes</h2>
+              <p class="text-sm text-white/60 -mt-0.5">
                 Revisa y decide antes de guardar cambios.
               </p>
             </div>
           </div>
 
-          <div class="flex flex-wrap items-center gap-2 text-xs">
+          <div class="flex flex-wrap items-center gap-2 text-sm">
             <span class="px-2 py-1 rounded-full bg-white/10">
               Total: <strong class="ml-1">{{ total }}</strong>
             </span>
@@ -62,18 +63,71 @@ export interface RetiroItem {
 
       <!-- List -->
       <div *ngIf="total > 0" class="p-3 sm:p-4 max-h-[420px] overflow-y-auto scroll-smooth custom-scroll">
-        <div class="grid gap-3">
-          <app-retiro-card
-            *ngFor="let retiro of retiros; trackBy: trackById"
-            [id]="retiro.id"
-            [fecha]="retiro.fecha"
-            [disabled]="disabled"
-            [aprobado]="!!retiro.aprobado"
-            [rechazado]="!!retiro.rechazado"
-            (verDetalles)="verDetalles.emit(retiro)"
-            (aprobar)="aprobar.emit(retiro)"
-            (rechazar)="rechazar.emit(retiro)"
-          ></app-retiro-card>
+        <div class="overflow-x-auto rounded-xl border border-white/10">
+          <table class="w-full min-w-[920px] text-base">
+            <thead class="bg-white/10 text-left">
+              <tr>
+                <th class="px-4 py-3 font-semibold text-[1.05rem]">ID</th>
+                <th class="px-4 py-3 font-semibold text-[1.05rem]">Asunto</th>
+                <th class="px-4 py-3 font-semibold text-[1.05rem]">Solicitante</th>
+                <th class="px-4 py-3 font-semibold text-[1.05rem]">Area</th>
+                <th class="px-4 py-3 font-semibold text-[1.05rem]">Fecha</th>
+                <th class="px-4 py-3 font-semibold text-center text-[1.05rem]">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                *ngFor="let retiro of retiros; trackBy: trackById"
+                class="border-t border-white/10"
+                [ngClass]="{
+                  'bg-green-500/10': retiro.aprobado,
+                  'bg-red-500/10': retiro.rechazado
+                }"
+              >
+                <td class="px-4 py-3 text-[1.05rem]">{{ retiro.id }}</td>
+                <td class="px-4 py-3 text-[1.05rem]">{{ retiro.raw?.type === 'income' ? 'Ingreso' : 'Retiro' }}</td>
+                <td class="px-4 py-3 text-[1.05rem]">{{ retiro.solicitante || 'No identificado' }}</td>
+                <td class="px-4 py-3 text-[1.05rem]">{{ retiro.area || 'Sin area' }}</td>
+                <td class="px-4 py-3 text-[1.05rem]">{{ retiro.fecha }}</td>
+                <td class="px-4 py-3 text-center">
+                  <div class="flex justify-center gap-2">
+                    <button
+                      type="button"
+                      class="px-3 py-1 rounded-full text-sm font-semibold bg-white/15 hover:bg-white/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                      [disabled]="disabled"
+                      (click)="verDetalles.emit(retiro)"
+                    >
+                      Detalles
+                    </button>
+                    <button
+                      type="button"
+                      class="inline-flex items-center justify-center h-9 w-9 rounded-full bg-green-600/80 text-white hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      [disabled]="disabled || !!retiro.aprobado || !!retiro.rechazado"
+                      (click)="aprobar.emit(retiro)"
+                      title="Aprobar"
+                      aria-label="Aprobar"
+                    >
+                      <svg viewBox="0 0 24 24" class="block h-6 w-6 fill-current" aria-hidden="true" focusable="false">
+                        <path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      class="inline-flex items-center justify-center h-9 w-9 rounded-full bg-red-600/80 text-white hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      [disabled]="disabled || !!retiro.aprobado || !!retiro.rechazado"
+                      (click)="rechazar.emit(retiro)"
+                      title="Rechazar"
+                      aria-label="Rechazar"
+                    >
+                      <svg viewBox="0 0 24 24" class="block h-6 w-6 fill-current" aria-hidden="true" focusable="false">
+                        <path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </section>

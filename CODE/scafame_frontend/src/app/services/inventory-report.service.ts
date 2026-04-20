@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment.prod'; // ✅ recomendado (no .prod)
 
@@ -22,6 +22,12 @@ export interface InventoryReportFilters {
   categoryId?: number;
   categoryName?: string;
   unitName?: string;
+}
+
+export interface TopConsumedByAreaFilters {
+  area?: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -54,6 +60,49 @@ export class InventoryReportService {
 
     return this.http.get(`${REPORTS_API}/inventory/excel`, {
       params,
+      responseType: 'blob',
+    });
+  }
+
+  downloadTopConsumedByAreaXlsx(filters?: TopConsumedByAreaFilters): Observable<Blob> {
+    let params = new HttpParams();
+
+    if (filters?.area) {
+      params = params.set('area', filters.area);
+    }
+
+    if (filters?.startDate) {
+      params = params.set('startDate', filters.startDate);
+    }
+
+    if (filters?.endDate) {
+      params = params.set('endDate', filters.endDate);
+    }
+
+    return this.http.get(`${REPORTS_API}/outcomes/top-products/excel`, {
+      params,
+      responseType: 'blob',
+    });
+  }
+
+  downloadTopConsumedByAreaXlsxResponse(filters?: TopConsumedByAreaFilters): Observable<HttpResponse<Blob>> {
+    let params = new HttpParams();
+
+    if (filters?.area) {
+      params = params.set('area', filters.area);
+    }
+
+    if (filters?.startDate) {
+      params = params.set('startDate', filters.startDate);
+    }
+
+    if (filters?.endDate) {
+      params = params.set('endDate', filters.endDate);
+    }
+
+    return this.http.get(`${REPORTS_API}/outcomes/top-products/excel`, {
+      params,
+      observe: 'response',
       responseType: 'blob',
     });
   }

@@ -23,6 +23,7 @@ type CreateReportInput = CreateReportDto & {
 @Injectable()
 export class ReportService {
   private readonly logger = new Logger(ReportService.name);
+  private static readonly DUPLICATE_OUTCOME_WINDOW_MS = 45_000;
 
   constructor(
     @InjectRepository(Report) private reportRepository: Repository<Report>,
@@ -99,6 +100,41 @@ export class ReportService {
       totals.set(it.productId, (totals.get(it.productId) ?? 0) + it.quantity);
     }
 
+    if (type === ReportType.OUTCOME && requestedById) {
+      const incomingFingerprint = this.buildItemsFingerprint(items);
+      const cutoff = new Date(Date.now() - ReportService.DUPLICATE_OUTCOME_WINDOW_MS);
+
+      const recentPending = await this.reportRepository.find({
+        where: {
+          type: ReportType.OUTCOME,
+          status: ReportStatus.PENDING,
+          requestedBy: { id: requestedById } as any,
+        },
+        relations: ['ProductReports', 'ProductReports.product'],
+        order: { createdAt: 'DESC' },
+        take: 10,
+      });
+
+      const duplicate = recentPending.find((report) => {
+        if (!report.createdAt || report.createdAt < cutoff) {
+          return false;
+        }
+
+        const existingItems = (report.ProductReports ?? []).map((line) => ({
+          productId: Number(line.product?.id),
+          quantity: Number(line.quantity),
+        }));
+
+        return this.buildItemsFingerprint(existingItems) === incomingFingerprint;
+      });
+
+      if (duplicate) {
+        throw new ConflictException(
+          `Ya existe una solicitud pendiente similar (#${duplicate.id}). Espera unos segundos antes de reintentar.`,
+        );
+      }
+    }
+
     const createdReport = await this.dataSource.transaction(async (manager) => {
       const reportRepo = manager.getRepository(Report);
       const prRepo = manager.getRepository(ProductReport);
@@ -166,23 +202,35 @@ export class ReportService {
       createdReport.type === ReportType.OUTCOME &&
       createdReport.requestedBy?.email
     ) {
-      try {
-        await this.notificationsService.sendOutcomePendingToAdministrators({
+      void this.notificationsService
+        .sendOutcomePendingToAdministrators({
           requesterName: createdReport.requestedBy.username ?? 'usuario',
           requesterEmail: createdReport.requestedBy.email,
           reportId: createdReport.id,
           createdAt: createdReport.createdAt,
+        })
+        .catch((error) => {
+          const message =
+            error instanceof Error ? error.message : 'Error desconocido';
+          this.logger.error(
+            `No se pudo notificar a administradores para reporte #${createdReport.id}: ${message}`,
+          );
         });
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : 'Error desconocido';
-        this.logger.error(
-          `No se pudo notificar a administradores para reporte #${createdReport.id}: ${message}`,
-        );
-      }
     }
 
     return createdReport;
+  }
+
+  private buildItemsFingerprint(items: Array<{ productId: number; quantity: number }>): string {
+    return items
+      .map((item) => ({
+        productId: Number(item.productId),
+        quantity: Number(item.quantity),
+      }))
+      .filter((item) => Number.isInteger(item.productId) && item.productId > 0 && item.quantity > 0)
+      .sort((a, b) => a.productId - b.productId)
+      .map((item) => `${item.productId}:${item.quantity}`)
+      .join('|');
   }
 
   async findAllReports(filters?: { type?: ReportType; status?: ReportStatus }) {
@@ -352,22 +400,22 @@ export class ReportService {
       });
 
       if (reportWithRequester?.requestedBy?.email) {
-        try {
-          await this.notificationsService.sendOutcomeApproved({
+        void this.notificationsService
+          .sendOutcomeApproved({
             recipientEmail: reportWithRequester.requestedBy.email,
             recipientUserId: reportWithRequester.requestedBy.id ?? null,
             requesterName: reportWithRequester.requestedBy.username ?? 'usuario',
             reportId: saved.id,
             approvedByName: approver.username ?? 'administrador',
             createdAt: saved.createdAt,
+          })
+          .catch((error) => {
+            const message =
+              error instanceof Error ? error.message : 'Error desconocido';
+            this.logger.error(
+              `No se pudo notificar aprobacion para reporte #${saved.id}: ${message}`,
+            );
           });
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : 'Error desconocido';
-          this.logger.error(
-            `No se pudo notificar aprobacion para reporte #${saved.id}: ${message}`,
-          );
-        }
       }
 
       return saved;
@@ -410,21 +458,21 @@ export class ReportService {
       });
 
       if (reportWithRequester?.requestedBy?.email) {
-        try {
-          await this.notificationsService.sendOutcomeRejected({
+        void this.notificationsService
+          .sendOutcomeRejected({
             recipientEmail: reportWithRequester.requestedBy.email,
             recipientUserId: reportWithRequester.requestedBy.id ?? null,
             requesterName: reportWithRequester.requestedBy.username ?? 'usuario',
             reportId: saved.id,
             createdAt: saved.createdAt,
+          })
+          .catch((error) => {
+            const message =
+              error instanceof Error ? error.message : 'Error desconocido';
+            this.logger.error(
+              `No se pudo notificar rechazo para reporte #${saved.id}: ${message}`,
+            );
           });
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : 'Error desconocido';
-          this.logger.error(
-            `No se pudo notificar rechazo para reporte #${saved.id}: ${message}`,
-          );
-        }
       }
 
       return saved;
